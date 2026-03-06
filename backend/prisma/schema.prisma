@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  googleId     String?  @unique
+  isVerified   Boolean  @default(false)
+  credits      Int      @default(2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  repositories  Repository[]
+  refreshTokens RefreshToken[]
+  otps          Otp[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// REFRESH TOKEN
+// ─────────────────────────────────────────
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  device    String?
+  ip        String?
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────
+// OTP
+// ─────────────────────────────────────────
+model Otp {
+  id        String   @id @default(cuid())
+  code      String
+  type      OtpType  @default(EMAIL_VERIFICATION)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("otps")
+}
+
+enum OtpType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+// ─────────────────────────────────────────
+// REPOSITORY
+// ─────────────────────────────────────────
+model Repository {
+  id          String   @id @default(cuid())
+  owner       String
+  name        String
+  description String?
+  language    String?
+  stars       Int?
+  isPrivate   Boolean  @default(false)
+  analyzedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, owner, name])
+  @@map("repositories")
+}
+
+// ─────────────────────────────────────────
+// FUTURE MODELS WILL GO HERE
+// e.g. RepositoryFile, CodeEmbedding, UsageLog, Payment
+// ─────────────────────────────────────────
