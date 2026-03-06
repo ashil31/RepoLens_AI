@@ -1,8 +1,8 @@
 import jwt from "jsonwebtoken"
 import crypto from "crypto"
 import { config } from "../config/app.config"
-import * as RefreshTokenRepo from "../repositories/refresh-token.repository"
-import * as OtpRepo from "../repositories/otp.repository"
+import * as RefreshTokenRepo from "../repositories/auth/refresh-token.repository"
+import * as OtpRepo from "../repositories/auth/otp.repository"
 import { OtpType, User } from "@prisma/client"
 
 const hashToken = (token: string) => {

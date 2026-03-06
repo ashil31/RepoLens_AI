@@ -6,7 +6,7 @@ import {
     findRepoByOwnerAndName,
     findRepoById,
     deleteRepository
-} from "../repositories/repository.repository"
+} from "../repositories/project.repository"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

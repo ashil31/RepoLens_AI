@@ -3,7 +3,7 @@ import { HTTPSTATUS } from "../config/http.config"
 import { asyncHandler } from "../middlewares/asyncHandler.middleware"
 import { registerUser, loginUser, verifyUserEmail, handleGoogleAuth } from "../services/user.service"
 import * as AuthService from "../services/auth.service"
-import * as RefreshTokenRepo from "../repositories/refresh-token.repository"
+import * as RefreshTokenRepo from "../repositories/auth/refresh-token.repository"
 import { prisma } from "../database/prisma"
 import { AppError } from "../utils/appError"
 
@@ -111,14 +111,14 @@ export const revokeSession = asyncHandler(async (req: Request, res: Response) =>
 
     // Fetch session and verify ownership
     const session = await prisma.refreshToken.findUnique({
-        where: { id: sessionId }
+        where: { id: sessionId as string }
     })
 
     if (!session || session.userId !== userId) {
         throw new AppError("Session not found or unauthorized", HTTPSTATUS.NOT_FOUND)
     }
 
-    await RefreshTokenRepo.revokeRefreshTokenById(sessionId)
+    await RefreshTokenRepo.revokeRefreshTokenById(sessionId as string)
 
     return res.status(HTTPSTATUS.OK).json({
         message: "Session revoked successfully"

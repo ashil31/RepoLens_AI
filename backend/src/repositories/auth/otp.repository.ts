@@ -1,5 +1,5 @@
 import { OtpType } from "@prisma/client"
-import { prisma } from "../database/prisma"
+import { prisma } from "../../database/prisma"
 
 export const createOtp = async (data: {
     userId: string
