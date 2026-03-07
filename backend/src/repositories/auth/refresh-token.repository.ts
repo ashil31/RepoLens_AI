@@ -26,7 +26,7 @@ export const findRefreshTokenByHash = async (tokenHash: string) => {
 }
 
 export const deleteRefreshTokenByHash = async (tokenHash: string) => {
-    return prisma.refreshToken.delete({
+    await prisma.refreshToken.deleteMany({
         where: { tokenHash }
     })
 }

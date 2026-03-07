@@ -35,6 +35,12 @@ export const findUserById = async (id: string) => {
     })
 }
 
+export const findUserByUsername = async (username: string) => {
+    return prisma.user.findFirst({
+        where: { username },
+    })
+}
+
 // ── Credits ───────────────────────────────────────────────────────────────────
 
 export const getUserCredits = async (userId: string) => {

@@ -4,6 +4,8 @@ import { asyncHandler } from "../middlewares/asyncHandler.middleware"
 import { registerUser, loginUser, verifyUserEmail, handleGoogleAuth } from "../services/user.service"
 import * as AuthService from "../services/auth.service"
 import * as RefreshTokenRepo from "../repositories/auth/refresh-token.repository"
+import { createNewWorkspace, getUserWorkspaces } from "../services/workspace.service"
+import { findUserById } from "../repositories/user.repository"
 import { prisma } from "../database/prisma"
 import { AppError } from "../utils/appError"
 
@@ -44,6 +46,9 @@ export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
 
     await verifyUserEmail(userId)
 
+    // Create a default workspace for the new user
+    await createNewWorkspace(userId, "My Workspace")
+
     return res.status(HTTPSTATUS.OK).json({
         message: "Email verified successfully. You can now login."
     })
@@ -52,6 +57,12 @@ export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
 export const login = asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = req.body
     const user = await loginUser(email, password)
+
+    // Ensure user has at least one workspace (for existing users who signed up before default workspace was added)
+    const workspaces = await getUserWorkspaces(user.id)
+    if (workspaces.length === 0) {
+        await createNewWorkspace(user.id, "My Workspace")
+    }
 
     const userAgent = (req.headers["user-agent"] as string) || "unknown"
     const ip = req.ip || req.socket.remoteAddress || "unknown"
@@ -67,7 +78,9 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         user: {
             id: user.id,
             email: user.email,
-            credits: user.credits
+            fullName: user.fullName,
+            username: user.username,
+            credits: user.credits,
         }
     })
 })
@@ -138,8 +151,19 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
 })
 
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
-    const user = (req as any).user
+    const jwtUser = (req as any).user as { id: string; email: string }
+    const user = await findUserById(jwtUser.id)
+    if (!user) {
+        throw new AppError("User not found", HTTPSTATUS.NOT_FOUND)
+    }
     return res.status(HTTPSTATUS.OK).json({
-        user
+        user: {
+            id: user.id,
+            email: user.email,
+            fullName: user.fullName,
+            username: user.username,
+            profileImage: user.profileImage,
+            credits: user.credits,
+        }
     })
 })

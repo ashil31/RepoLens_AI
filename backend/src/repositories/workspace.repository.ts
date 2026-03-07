@@ -29,6 +29,11 @@ export const createWorkspace = async (data: { name: string; userId: string }) =>
 // ── Read ─────────────────────────────────────────────────────────────────────
 
 export const findWorkspacesByUserId = async (userId: string) => {
+    if (typeof (prisma as any).workspace === "undefined") {
+        throw new Error(
+            "Prisma client is out of sync. Run 'npx prisma generate' in the backend folder and restart the server."
+        )
+    }
     return prisma.workspace.findMany({
         where: {
             members: {

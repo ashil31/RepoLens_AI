@@ -88,10 +88,8 @@ export const updateProfile = async (
 
     // Check if username is already taken by someone else
     if (data.username) {
-        const { prisma } = await import("../database/prisma")
-        const existingUsername = await prisma.user.findUnique({
-            where: { username: data.username }
-        })
+        const { findUserByUsername } = await import("../repositories/user.repository")
+        const existingUsername = await findUserByUsername(data.username)
         if (existingUsername && existingUsername.id !== userId) {
             throw new AppError("Username is already taken", HTTPSTATUS.CONFLICT, "USERNAME_TAKEN")
         }
