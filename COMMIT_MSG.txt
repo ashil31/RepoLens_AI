@@ -1,0 +1,21 @@
+feat: add full-stack dashboard with auth, workspaces, and billing-aware UI
+
+Backend
+- Auth: return user credits in login response; create default "My Workspace"
+  on signup (verifyOtp) and on login when user has no workspaces
+- Validation: restrict middleware to req.body only (fix read-only req.query/params)
+- Refresh tokens: use deleteMany for token cleanup in auth repository
+- User: add findUserByUsername; ensure credits and profile fields in responses
+- Workspace: guard against undefined prisma.workspace; support member invite
+- User service: credit checks for analysis and related flows
+- Dependencies: update package-lock.json
+
+Frontend (new)
+- App shell: dashboard layout, sidebar with workspace selector, nav, and user menu
+- Auth: login, register with OTP, token refresh, and auth store (accessToken, user)
+- API: client with interceptors, services for auth, profile, workspaces, repos
+- Workspaces: list/create/update/delete; invite member; dedupe by id in sidebar
+- Billing: disable "Create new workspace" and "Invite member" when credits === 0
+- Repositories: list and detail by workspace; add/delete repo
+- Settings: profile update and workspace name update (PUT /workspaces/:id)
+- Sidebar: flat active/hover states (no left border/shadow); clean collapsed icon UI

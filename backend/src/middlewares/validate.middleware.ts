@@ -9,12 +9,10 @@ export const validate =
                     body: req.body,
                     query: req.query,
                     params: req.params
-                }) as { body: unknown; query: unknown; params: unknown }
+                }) as { body: unknown; query?: unknown; params?: unknown }
 
                 req.body = validated.body
-                req.query = validated.query as Record<string, string>
-                req.params = validated.params as Record<string, string>
-
+                // req.query and req.params are read-only in Express; do not assign to them.
                 next()
             } catch (err) {
                 next(err)
