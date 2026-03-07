@@ -1,13 +1,19 @@
 import { Router } from "express"
-import { authenticate, creditCheck } from "../../middlewares/auth.middleware"
+import { authenticate } from "../../middlewares/auth.middleware"
+import {
+    addRepositoryHandler,
+    getWorkspaceRepositoriesHandler,
+    getRepositoryDetailsHandler,
+    deleteRepositoryHandler
+} from "../../controllers/repository.controller"
 
-const router = Router()
+const router = Router({ mergeParams: true })
 
-// Currently these controllers don't fully exist for /analyze and /chat, 
-// using placeholder structure until Module 3/4.
-// For now, let's just create the route structure.
+router.use(authenticate)
 
-// router.post("/add", authenticate, creditCheck, (req, res) => res.send("Repo added"))
-// router.post("/analyze", authenticate, creditCheck, (req, res) => res.send("Repo analyzed"))
+router.post("/add", addRepositoryHandler)
+router.get("/", getWorkspaceRepositoriesHandler)
+router.get("/:repoId", getRepositoryDetailsHandler)
+router.delete("/:repoId", deleteRepositoryHandler)
 
 export default router

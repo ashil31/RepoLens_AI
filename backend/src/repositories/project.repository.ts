@@ -3,7 +3,7 @@ import { prisma } from "../database/prisma"
 // ── Create ───────────────────────────────────────────────────────────────────
 
 export const createRepository = async (data: {
-    userId: string
+    workspaceId: string
     owner: string
     name: string
     description?: string
@@ -13,8 +13,8 @@ export const createRepository = async (data: {
 }) => {
     return prisma.repository.upsert({
         where: {
-            userId_owner_name: {
-                userId: data.userId,
+            workspaceId_owner_name: {
+                workspaceId: data.workspaceId,
                 owner: data.owner,
                 name: data.name
             }
@@ -27,7 +27,7 @@ export const createRepository = async (data: {
             analyzedAt: new Date()
         },
         create: {
-            userId: data.userId,
+            workspaceId: data.workspaceId,
             owner: data.owner,
             name: data.name,
             description: data.description,
@@ -40,21 +40,21 @@ export const createRepository = async (data: {
 
 // ── Read ─────────────────────────────────────────────────────────────────────
 
-export const findReposByUserId = async (userId: string) => {
+export const findReposByWorkspaceId = async (workspaceId: string) => {
     return prisma.repository.findMany({
-        where: { userId },
+        where: { workspaceId },
         orderBy: { analyzedAt: "desc" }
     })
 }
 
 export const findRepoByOwnerAndName = async (
-    userId: string,
+    workspaceId: string,
     owner: string,
     name: string
 ) => {
     return prisma.repository.findUnique({
         where: {
-            userId_owner_name: { userId, owner, name }
+            workspaceId_owner_name: { workspaceId, owner, name }
         }
     })
 }

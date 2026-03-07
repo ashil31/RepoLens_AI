@@ -21,9 +21,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  repositories  Repository[]
-  refreshTokens RefreshToken[]
-  otps          Otp[]
+  refreshTokens    RefreshToken[]
+  otps             Otp[]
+  workspaceMembers WorkspaceMember[]
 
   @@map("users")
 }
@@ -68,6 +68,41 @@ enum OtpType {
 }
 
 // ─────────────────────────────────────────
+// WORKSPACE & MEMBERSHIP
+// ─────────────────────────────────────────
+enum WorkspaceRole {
+  OWNER
+  MEMBER
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members      WorkspaceMember[]
+  repositories Repository[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id       String        @id @default(cuid())
+  role     WorkspaceRole @default(MEMBER)
+  joinedAt DateTime      @default(now())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+// ─────────────────────────────────────────
 // REPOSITORY
 // ─────────────────────────────────────────
 model Repository {
@@ -82,12 +117,12 @@ model Repository {
   analyzedAt  DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   files RepositoryFile[]
 
-  @@unique([userId, owner, name])
+  @@unique([workspaceId, owner, name])
   @@map("repositories")
 }
 
