@@ -80,6 +80,27 @@ export const getUserProfile = async (userId: string) => {
     return user
 }
 
+export const updateProfile = async (
+    userId: string,
+    data: { fullName?: string; username?: string; profileImage?: string }
+) => {
+    const { updateUserProfile } = await import("../repositories/user.repository")
+
+    // Check if username is already taken by someone else
+    if (data.username) {
+        const { prisma } = await import("../database/prisma")
+        const existingUsername = await prisma.user.findUnique({
+            where: { username: data.username }
+        })
+        if (existingUsername && existingUsername.id !== userId) {
+            throw new AppError("Username is already taken", HTTPSTATUS.CONFLICT, "USERNAME_TAKEN")
+        }
+    }
+
+    const updatedUser = await updateUserProfile(userId, data)
+    return updatedUser
+}
+
 // ── Credits ───────────────────────────────────────────────────────────────────
 
 export const checkAndDeductCredit = async (userId: string) => {

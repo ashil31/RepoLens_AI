@@ -78,6 +78,20 @@ export const markUserAsVerified = async (userId: string) => {
     })
 }
 
+export const updateUserProfile = async (
+    userId: string,
+    data: {
+        fullName?: string
+        username?: string
+        profileImage?: string
+    }
+) => {
+    return prisma.user.update({
+        where: { id: userId },
+        data
+    })
+}
+
 export const createGoogleUser = async (data: {
     email: string
     googleId: string
