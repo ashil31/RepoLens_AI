@@ -452,13 +452,13 @@ export function Sidebar({ collapsed = false, style }: SidebarProps) {
                     <span>Home Page</span>
                     <Home className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </Link>
-                  <button
+                  {/* <button
                     type="button"
                     className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent"
                   >
                     <span>Changelog</span>
                     <FileEdit className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  </button>
+                  </button> */}
                   <button
                     type="button"
                     className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent"
@@ -501,7 +501,7 @@ export function Sidebar({ collapsed = false, style }: SidebarProps) {
                 </div>
 
                 {/* Platform status */}
-                <div className="border-t border-border px-4 py-3">
+                {/* <div className="border-t border-border px-4 py-3">
                   <p className="text-xs text-muted-foreground">Platform Status</p>
                   <p className="mt-0.5 flex items-center gap-2 text-sm text-foreground">
                     <span
@@ -512,7 +512,7 @@ export function Sidebar({ collapsed = false, style }: SidebarProps) {
                       Dubai region (dxb1) is unavailable an...
                     </span>
                   </p>
-                </div>
+                </div> */}
               </PopoverContent>
             </Popover>
             <Button

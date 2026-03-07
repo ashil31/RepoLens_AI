@@ -49,6 +49,7 @@ export interface SessionItem {
 
 export interface SessionsResponse {
   sessions: SessionItem[];
+  currentSessionId?: string | null;
 }
 
 export async function register(data: RegisterInput): Promise<RegisterResponse> {

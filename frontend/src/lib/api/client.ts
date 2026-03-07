@@ -3,6 +3,7 @@
  * - Protected calls (non-auth): only Authorization: Bearer <accessToken>; no cookie sent.
  * - Auth calls (/auth/*): credentials: "include" so refresh & logout receive the cookie.
  * On 401, attempts refresh (cookie sent only to /auth/refresh) then retries once.
+ * Only one refresh runs at a time; concurrent 401s wait for the same refresh and then retry.
  */
 
 const getBaseUrl = () =>
@@ -31,18 +32,28 @@ export function setOnRefreshFailure(fn: () => void) {
   onRefreshFailure = fn;
 }
 
+let refreshPromise: Promise<string> | null = null;
+
 async function refreshAccessToken(): Promise<string> {
-  const res = await fetch(`${getBaseUrl()}/auth/refresh`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || "Session expired");
-  }
-  const data = await res.json();
-  return data.accessToken;
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${getBaseUrl()}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.message || "Session expired");
+      }
+      const data = await res.json();
+      return data.accessToken;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
 }
 
 export interface ApiError {
