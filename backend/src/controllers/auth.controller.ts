@@ -6,6 +6,7 @@ import * as AuthService from "../services/auth.service"
 import * as RefreshTokenRepo from "../repositories/auth/refresh-token.repository"
 import { createNewWorkspace, getUserWorkspaces } from "../services/workspace.service"
 import { findUserById } from "../repositories/user.repository"
+import { config } from "../config/app.config"
 import { prisma } from "../database/prisma"
 import { AppError } from "../utils/appError"
 
@@ -16,8 +17,8 @@ const setRefreshTokenCookie = (res: Response, token: string) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        path: "/", // Important for cross-route access
-        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+        path: "/",
+        maxAge: config.JWT_REFRESH_EXPIRES_MS
     })
 }
 
@@ -112,9 +113,15 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 export const getSessions = asyncHandler(async (req: Request, res: Response) => {
     const userId = (req as any).user.id
     const sessions = await RefreshTokenRepo.getUserActiveSessions(userId)
+    const refreshToken = req.cookies.refreshToken
+    let currentSessionId: string | null = null
+    if (refreshToken) {
+        currentSessionId = await AuthService.getSessionIdByRawToken(refreshToken)
+    }
 
     return res.status(HTTPSTATUS.OK).json({
-        sessions
+        sessions,
+        currentSessionId
     })
 })
 
@@ -141,8 +148,7 @@ export const revokeSession = asyncHandler(async (req: Request, res: Response) =>
 export const logout = asyncHandler(async (req: Request, res: Response) => {
     const refreshToken = req.cookies.refreshToken
     if (refreshToken) {
-        // Optional: delete from DB
-        await AuthService.rotateRefreshToken(refreshToken, "")
+        await AuthService.revokeRefreshTokenByRawToken(refreshToken)
     }
     res.clearCookie("refreshToken", { path: "/" })
     return res.status(HTTPSTATUS.OK).json({

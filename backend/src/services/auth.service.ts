@@ -18,10 +18,11 @@ export const generateAccessToken = (user: { id: string; email: string }) => {
 }
 
 export const generateRefreshToken = async (userId: string, device?: string, ip?: string) => {
+    await RefreshTokenRepo.revokeActiveByUserAndDevice(userId, device ?? null, ip ?? null)
+
     const token = crypto.randomBytes(40).toString("hex")
     const tokenHash = hashToken(token)
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 30) // 30 days
+    const expiresAt = new Date(Date.now() + config.JWT_REFRESH_EXPIRES_MS)
 
     await RefreshTokenRepo.createRefreshToken({
         tokenHash,
@@ -52,6 +53,19 @@ export const rotateRefreshToken = async (oldToken: string, userId: string, devic
     const oldHash = hashToken(oldToken)
     await RefreshTokenRepo.deleteRefreshTokenByHash(oldHash)
     return generateRefreshToken(userId, device, ip)
+}
+
+/** Revoke the session for the given refresh token (e.g. on logout). */
+export const revokeRefreshTokenByRawToken = async (token: string) => {
+    const tokenHash = hashToken(token)
+    await RefreshTokenRepo.deleteRefreshTokenByHash(tokenHash)
+}
+
+/** Get session id for the given refresh token (for "current session" in UI). */
+export const getSessionIdByRawToken = async (token: string): Promise<string | null> => {
+    const tokenHash = hashToken(token)
+    const stored = await RefreshTokenRepo.findRefreshTokenByHash(tokenHash)
+    return stored && !stored.revoked && stored.expiresAt > new Date() ? stored.id : null
 }
 
 // ── OTP ──────────────────────────────────────────────────────────────────────

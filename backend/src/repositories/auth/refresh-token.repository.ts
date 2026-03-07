@@ -48,6 +48,24 @@ export const getUserActiveSessions = async (userId: string) => {
     })
 }
 
+/** Revoke all active tokens for this user + device + ip so we keep one session per device. */
+export const revokeActiveByUserAndDevice = async (
+    userId: string,
+    device?: string | null,
+    ip?: string | null
+) => {
+    await prisma.refreshToken.updateMany({
+        where: {
+            userId,
+            revoked: false,
+            expiresAt: { gt: new Date() },
+            ...(device != null && { device }),
+            ...(ip != null && { ip })
+        },
+        data: { revoked: true }
+    })
+}
+
 export const revokeRefreshTokenById = async (id: string) => {
     return prisma.refreshToken.update({
         where: { id },
