@@ -1,9 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pgvector(map: "vector")]
 }
 
 // ─────────────────────────────────────────
@@ -73,6 +75,7 @@ model Repository {
   owner       String
   name        String
   description String?
+  repoUrl     String? // Added this for easier cloning
   language    String?
   stars       Int?
   isPrivate   Boolean  @default(false)
@@ -82,11 +85,46 @@ model Repository {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  files RepositoryFile[]
+
   @@unique([userId, owner, name])
   @@map("repositories")
 }
 
 // ─────────────────────────────────────────
-// FUTURE MODELS WILL GO HERE
-// e.g. RepositoryFile, CodeEmbedding, UsageLog, Payment
+// REPOSITORY FILE
 // ─────────────────────────────────────────
+model RepositoryFile {
+  id        String   @id @default(cuid())
+  path      String // Relative path in repo
+  language  String?
+  content   String?  @db.Text
+  tokenSize Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  embeddings CodeEmbedding[]
+
+  @@unique([repositoryId, path])
+  @@map("repository_files")
+}
+
+// ─────────────────────────────────────────
+// CODE EMBEDDING
+// ─────────────────────────────────────────
+model CodeEmbedding {
+  id        String                       @id @default(cuid())
+  chunk     String                       @db.Text
+  embedding Unsupported("vector(1536)")? // OpenAI embedding size
+  startLine Int?
+  endLine   Int?
+  createdAt DateTime                     @default(now())
+
+  fileId String
+  file   RepositoryFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("code_embeddings")
+}
