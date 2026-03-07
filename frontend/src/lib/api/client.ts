@@ -1,12 +1,19 @@
 /**
- * API client for backend. Uses credentials for refresh token cookie.
- * On 401, attempts refresh then retries the request once.
+ * API client: access token in localStorage (via auth store), refresh token in httpOnly cookie.
+ * - Protected calls (non-auth): only Authorization: Bearer <accessToken>; no cookie sent.
+ * - Auth calls (/auth/*): credentials: "include" so refresh & logout receive the cookie.
+ * On 401, attempts refresh (cookie sent only to /auth/refresh) then retries once.
  */
 
 const getBaseUrl = () =>
   typeof window !== "undefined"
     ? (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1")
     : process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+
+const isAuthPath = (path: string) => {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return p.startsWith("/auth");
+};
 
 let getAccessToken: (() => string | null) | null = null;
 let onRefreshSuccess: ((token: string) => void) | null = null;
@@ -24,10 +31,11 @@ export function setOnRefreshFailure(fn: () => void) {
   onRefreshFailure = fn;
 }
 
-async function refreshToken(): Promise<string> {
+async function refreshAccessToken(): Promise<string> {
   const res = await fetch(`${getBaseUrl()}/auth/refresh`, {
     method: "POST",
     credentials: "include",
+    headers: { "Content-Type": "application/json" },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -60,28 +68,31 @@ async function request<T>(
   options: RequestInit & { skipRefresh?: boolean } = {}
 ): Promise<T> {
   const { skipRefresh, ...init } = options;
-  const url = path.startsWith("http") ? path : `${getBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
-  const token = getAccessToken?.() ?? null;
+  const url = path.startsWith("http")
+    ? path
+    : `${getBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
 
-  const doFetch = async (tokenToUse: string | null): Promise<Response> => {
+  const doFetch = (token: string | null): Promise<Response> => {
     const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...(init.headers as Record<string, string>),
     };
-    if (tokenToUse) (headers as Record<string, string>)["Authorization"] = `Bearer ${tokenToUse}`;
-
+    if (token) {
+      (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+    }
     return fetch(url, {
       ...init,
       headers,
-      credentials: "include",
+      credentials: isAuthPath(path) ? "include" : "omit",
     });
   };
 
+  const token = getAccessToken?.() ?? null;
   let res = await doFetch(token);
 
-  if (res.status === 401 && !skipRefresh && token) {
+  if (res.status === 401 && !skipRefresh) {
     try {
-      const newToken = await refreshToken();
+      const newToken = await refreshAccessToken();
       onRefreshSuccess?.(newToken);
       res = await doFetch(newToken);
     } catch (e) {
@@ -105,8 +116,14 @@ async function request<T>(
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
   post: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+    request<T>(path, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
   put: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+    request<T>(path, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };

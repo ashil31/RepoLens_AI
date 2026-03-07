@@ -32,7 +32,11 @@ export interface RefreshResponse {
 }
 
 export interface MeResponse {
-  user: AuthUser & { fullName?: string | null; username?: string | null };
+  user: AuthUser & {
+    fullName?: string | null;
+    username?: string | null;
+    profileImage?: string | null;
+  };
 }
 
 export interface SessionItem {

@@ -1,16 +1,11 @@
 /**
- * Current user and workspace display data.
- *
- * FALLBACK: Values come from config constants. When auth/API is ready,
- * replace this module (e.g. with a hook or context that fetches user/workspace)
- * and keep the same exports so components don't need to change.
+ * Fallbacks for current user display when API has not returned yet (loading or unauthenticated).
+ * Real data comes from auth store + getMe() and workspace APIs.
  */
 
-import {
-  USER_DISPLAY_NAME as FALLBACK_DISPLAY_NAME,
-  USER_EMAIL as FALLBACK_EMAIL,
-  WORKSPACE_PLAN as FALLBACK_PLAN,
-} from "@/config";
+export const FALLBACK_DISPLAY_NAME = "User";
+export const FALLBACK_EMAIL = "—";
+export const FALLBACK_PLAN = "Hobby";
 
 export function getDisplayName(): string {
   return FALLBACK_DISPLAY_NAME;
@@ -21,14 +16,13 @@ export function getEmail(): string {
 }
 
 export function getProjectsLabel(): string {
-  return `${FALLBACK_DISPLAY_NAME}'s projects`;
+  return "My projects";
 }
 
 export function getWorkspacePlan(): string {
   return FALLBACK_PLAN;
 }
 
-/** Single object for convenience; replace with API response shape later */
 export function getCurrentUser() {
   return {
     displayName: getDisplayName(),
