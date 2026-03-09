@@ -74,15 +74,26 @@ export const fetchAndSaveRepository = async (
             recursive: "true"
         })
 
-        // Filter for code files (avoiding images, binary files)
-        const textExtensions = [".ts", ".js", ".json", ".md", ".html", ".css", ".py", ".java", ".cpp", ".c", ".go", ".rs"]
-        const codeFiles = treeData.tree.filter(
-            (node) => node.type === "blob" && textExtensions.some(ext => node.path?.endsWith(ext))
-        )
+        // Filter for code files (excluding binary files)
+        const binaryExtensions = [
+            ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
+            ".mp4", ".mp3", ".wav", ".ogg",
+            ".zip", ".tar", ".gz", ".rar",
+            ".exe", ".dll", ".so",
+            ".pdf", ".ico"
+        ]
+        const codeFiles = treeData.tree.filter((node) => {
+            if (node.type !== "blob" || !node.path) return false
+
+            const ext = node.path.split(".").pop()?.toLowerCase()
+            if (!ext) return false
+
+            return !binaryExtensions.includes("." + ext)
+        })
 
         // For simplicity and speed in this module, we will fetch contents of a limited number of files
         // In a real production system, this would be queued or streamed
-        const MAX_FILES = 20
+        const MAX_FILES = 200
         const filesToFetch = codeFiles.slice(0, MAX_FILES)
 
         fileContents = await Promise.all(
@@ -93,7 +104,9 @@ export const fetchAndSaveRepository = async (
                     const headers: HeadersInit = accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
                     const response = await fetch(url, { headers })
                     const content = await response.text()
-                    return { path: fileNode.path, content }
+                    // Sanitize: Remove null bytes which PostgreSQL doesn't allow in UTF-8 strings
+                    const sanitizedContent = content.replace(/\0/g, "")
+                    return { path: fileNode.path, content: sanitizedContent }
                 } catch {
                     return { path: fileNode.path, content: "" }
                 }
@@ -156,6 +169,8 @@ export const fetchAndSaveRepository = async (
         }
 
         return repo
+    }, {
+        timeout: 30000 // 30 seconds
     })
 }
 

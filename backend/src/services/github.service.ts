@@ -38,9 +38,19 @@ export async function getInstallationToken(installationId: number): Promise<stri
  */
 export async function getInstallationRepositories(installationId: number) {
     const token = await getInstallationToken(installationId)
-    const octokit = new Octokit({ auth: token })
-    const { data } = await octokit.apps.listReposAccessibleToInstallation()
-    return data.repositories
+
+    const octokit = new Octokit({
+        auth: token
+    })
+
+    const repos = await octokit.paginate(
+        octokit.apps.listReposAccessibleToInstallation,
+        {
+            per_page: 100
+        }
+    )
+
+    return repos
 }
 
 /**
