@@ -1,20 +1,17 @@
 import { Octokit } from "@octokit/rest"
 import { AppError } from "../utils/appError"
 import { HTTPSTATUS } from "../config/http.config"
-import { findWorkspaceMember } from "../repositories/workspace.repository"
 import {
-    createRepository,
     findReposByWorkspaceId,
-    findRepoByOwnerAndName,
     findRepoById,
     deleteRepository
 } from "../repositories/project.repository"
+import * as githubApi from "./github.service"
+import * as githubRepository from "../repositories/github.repository"
 import { prisma } from "../database/prisma"
 
-// Initialize Octokit (you can optionally pass auth token from env vars)
-const octokit = new Octokit({
-    // auth: process.env.GITHUB_TOKEN
-})
+// Default Octokit (no auth – public repos only)
+const getDefaultOctokit = () => new Octokit({})
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,14 +34,26 @@ export const parseGitHubUrl = (repoUrl: string): { owner: string; name: string }
 
 // ── GitHub Fetch & Save ───────────────────────────────────────────────────────
 
+export const parseRepoFullName = (fullName: string): { owner: string; name: string } => {
+    const parts = fullName.trim().split("/")
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+        throw new AppError(
+            "Invalid repository full name. Expected format: owner/repo",
+            HTTPSTATUS.BAD_REQUEST,
+            "INVALID_REPO_FULL_NAME"
+        )
+    }
+    return { owner: parts[0], name: parts[1] }
+}
+
 export const fetchAndSaveRepository = async (
     workspaceId: string,
-    githubUrl: string
+    githubUrl: string,
+    accessToken?: string
 ) => {
     const { owner, name } = parseGitHubUrl(githubUrl)
-
-    // 1. Fetch metadata
-    let repoMetadata
+    const octokit = accessToken ? new Octokit({ auth: accessToken }) : getDefaultOctokit()
+    let repoMetadata: { default_branch: string; description?: string | null; language?: string | null; stargazers_count?: number; private?: boolean }
     try {
         const { data } = await octokit.repos.get({ owner, repo: name })
         repoMetadata = data
@@ -52,7 +61,7 @@ export const fetchAndSaveRepository = async (
         throw new AppError("Failed to fetch repository from GitHub. Ensure it is public or provide a token.", HTTPSTATUS.NOT_FOUND, "GITHUB_REPO_NOT_FOUND")
     }
 
-    // 2. Fetch Default branch tree (recursive)
+    // 1. Fetch metadata (recursive)
     let fileContents: { path: string; content: string }[] = []
     try {
         const { data: branchData } = await octokit.repos.getBranch({ owner, repo: name, branch: repoMetadata.default_branch })
@@ -80,7 +89,9 @@ export const fetchAndSaveRepository = async (
             filesToFetch.map(async (fileNode) => {
                 if (!fileNode.path) return { path: "", content: "" }
                 try {
-                    const response = await fetch(`https://raw.githubusercontent.com/${owner}/${name}/${repoMetadata.default_branch}/${fileNode.path}`)
+                    const url = `https://raw.githubusercontent.com/${owner}/${name}/${repoMetadata.default_branch}/${fileNode.path}`
+                    const headers: HeadersInit = accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+                    const response = await fetch(url, { headers })
                     const content = await response.text()
                     return { path: fileNode.path, content }
                 } catch {
@@ -111,6 +122,7 @@ export const fetchAndSaveRepository = async (
                 language: repoMetadata.language || "",
                 stars: repoMetadata.stargazers_count || 0,
                 isPrivate: repoMetadata.private || false,
+                status: "COMPLETED",
                 analyzedAt: new Date()
             },
             create: {
@@ -121,6 +133,7 @@ export const fetchAndSaveRepository = async (
                 language: repoMetadata.language || "",
                 stars: repoMetadata.stargazers_count || 0,
                 isPrivate: repoMetadata.private || false,
+                status: "COMPLETED",
                 repoUrl: githubUrl
             }
         })
@@ -176,4 +189,73 @@ export const removeRepository = async (workspaceId: string, repoId: string, user
     }
 
     return deleteRepository(repoId)
+}
+
+// ── GitHub (workspace connection) ─────────────────────────────────────────────
+// Delegates to github.service + github.repository; single entry for "repos + GitHub" per workspace.
+
+export async function connectGitHub(
+    workspaceId: string,
+    userId: string,
+    installationId: number
+) {
+    const details = await githubApi.getInstallationDetails(installationId)
+    return githubRepository.upsertInstallation({
+        githubInstallationId: installationId,
+        githubAccountLogin: details.accountLogin,
+        githubAccountId: details.accountId,
+        userId,
+        workspaceId
+    })
+}
+
+export async function getGitHubRepositories(workspaceId: string, userId: string) {
+    const installation = await githubRepository.findInstallationByUserAndWorkspace(userId, workspaceId)
+    if (!installation) return { repos: [], connected: false, accountLogin: null as string | null }
+    const repos = await githubApi.getInstallationRepositories(installation.githubInstallationId)
+    return {
+        repos: (repos as {
+            full_name?: string
+            name?: string
+            private?: boolean
+            default_branch?: string
+            updated_at?: string | null
+            description?: string | null
+            language?: string | null
+            stargazers_count?: number
+            owner?: { login?: string }
+        }[]).map((r) => ({
+            fullName: r.full_name,
+            name: r.name,
+            private: r.private,
+            defaultBranch: r.default_branch,
+            updatedAt: r.updated_at ?? undefined,
+            description: r.description ?? undefined,
+            language: r.language ?? undefined,
+            stars: r.stargazers_count ?? undefined,
+            owner: r.owner?.login
+        })),
+        connected: true,
+        accountLogin: installation.githubAccountLogin
+    }
+}
+
+export async function getGitHubInstallationStatus(workspaceId: string, userId: string) {
+    const installation = await githubRepository.findInstallationByUserAndWorkspace(userId, workspaceId)
+    if (!installation) return { connected: false, accountLogin: null as string | null }
+    return { connected: true, accountLogin: installation.githubAccountLogin }
+}
+
+export async function disconnectGitHub(workspaceId: string, userId: string) {
+    return githubRepository.deleteInstallationByUserAndWorkspace(userId, workspaceId)
+}
+
+/** Returns installation token for this workspace (for adding repo by full name). Never store the token. */
+export async function getInstallationTokenForWorkspace(
+    workspaceId: string,
+    userId: string
+): Promise<string | null> {
+    const installation = await githubRepository.findInstallationByUserAndWorkspace(userId, workspaceId)
+    if (!installation) return null
+    return githubApi.getInstallationToken(installation.githubInstallationId)
 }

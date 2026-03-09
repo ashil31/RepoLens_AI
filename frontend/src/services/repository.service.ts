@@ -2,7 +2,8 @@ import { api } from "@/lib/api/client";
 import type { Repository } from "@/types/user";
 
 export interface AddRepositoryInput {
-  githubUrl: string;
+  githubUrl?: string;
+  repositoryFullName?: string;
 }
 
 export interface RepositoriesListResponse {
@@ -27,4 +28,45 @@ export async function getRepositoryDetails(workspaceId: string, repoId: string):
 
 export async function deleteRepository(workspaceId: string, repoId: string): Promise<{ message: string }> {
   return api.delete(`/workspaces/${workspaceId}/repos/${repoId}`);
+}
+
+// ── GitHub (workspace connection) ─────────────────────────────────────────────
+
+export interface GitHubInstallationStatusResponse {
+  connected: boolean;
+  accountLogin: string | null;
+}
+
+export interface GitHubRepoItem {
+  fullName?: string;
+  name?: string;
+  private?: boolean;
+  defaultBranch?: string;
+  updatedAt?: string;
+  description?: string;
+  language?: string;
+  stars?: number;
+  owner?: string;
+}
+
+export interface GitHubRepositoriesResponse {
+  data: GitHubRepoItem[];
+  connected: boolean;
+  accountLogin: string | null;
+}
+
+export async function getGitHubInstallationStatus(workspaceId: string): Promise<GitHubInstallationStatusResponse> {
+  return api.get<GitHubInstallationStatusResponse>(`/workspaces/${workspaceId}/repos/github/installation`);
+}
+
+export async function getGitHubRepositories(workspaceId: string): Promise<GitHubRepositoriesResponse> {
+  return api.get<GitHubRepositoriesResponse>(`/workspaces/${workspaceId}/repos/github/repositories`);
+}
+
+export async function installGitHub(workspaceId: string, installationId: number): Promise<{ message: string; data: { accountLogin: string } }> {
+  return api.post(`/workspaces/${workspaceId}/repos/github/install`, { installationId });
+}
+
+export async function disconnectGitHub(workspaceId: string): Promise<{ message: string }> {
+  return api.delete(`/workspaces/${workspaceId}/repos/github/installation`);
 }

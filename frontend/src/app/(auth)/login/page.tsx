@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { login } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth-store";
+import { toast } from "@/lib/toast";
 import { ApiClientError } from "@/lib/api/client";
 
 export default function LoginPage() {
@@ -24,18 +25,21 @@ export default function LoginPage() {
     try {
       const res = await login({ email, password });
       setAuth(res.accessToken, res.user);
+      toast.success("Welcome back", "You have been signed in.");
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Login failed");
+      const msg = err instanceof ApiClientError ? err.message : "Login failed";
+      setError(msg);
+      toast.error("Sign in failed", msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-      <h1 className="text-2xl font-semibold text-foreground">Log in</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-8 sm:py-12">
+      <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Log in</h1>
       <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
         <div>
           <label htmlFor="email" className="mb-1 block text-sm font-medium text-foreground">

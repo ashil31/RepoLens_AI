@@ -7,6 +7,7 @@ import { useAppStore } from "@/store";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useWorkspaces } from "@/hooks/queries";
 import { useEffect } from "react";
+import { SidebarMobileProvider } from "@/context/sidebar-mobile-context";
 
 function DashboardAuthSync() {
   useRequireAuth();
@@ -32,16 +33,18 @@ export default function DashboardLayout({
   const setCommandPaletteOpen = useAppStore((s) => s.setCommandPaletteOpen);
 
   return (
-    <div className="flex h-screen min-h-0 overflow-hidden bg-background">
-      <DashboardAuthSync />
-      <SidebarWithToggle />
-      <div className="flex min-h-0 flex-1 flex-col min-w-0 transition-[padding] duration-200 overflow-hidden">
-        <DashboardHeader />
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-6">
-          <div className="flex min-h-0 flex-1 flex-col">{children}</div>
-        </main>
+    <SidebarMobileProvider>
+      <div className="flex h-screen min-h-0 overflow-hidden bg-background">
+        <DashboardAuthSync />
+        <SidebarWithToggle />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col transition-[padding] duration-200 overflow-hidden">
+          <DashboardHeader />
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-6">
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+          </main>
+        </div>
+        <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
       </div>
-      <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
-    </div>
+    </SidebarMobileProvider>
   );
 }

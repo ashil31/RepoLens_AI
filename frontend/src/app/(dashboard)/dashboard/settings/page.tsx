@@ -3,7 +3,7 @@
 import React from "react";
 import { useTheme } from "next-themes";
 import { useSyncExternalStore } from "react";
-import { Pencil, Monitor, Trash2 } from "lucide-react";
+import { Pencil, Monitor, Trash2, Github } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -15,8 +15,9 @@ import { DashboardPageShell } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useProfile, useUpdateProfile, useSessions, useDeleteSession, useWorkspaces, useUpdateWorkspace } from "@/hooks/queries";
+import { useProfile, useUpdateProfile, useSessions, useDeleteSession, useWorkspaces, useUpdateWorkspace, useGitHubInstallationStatus, useDisconnectGitHub } from "@/hooks/queries";
 import { useProfileStore, useAppStore } from "@/store";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 const THEME_OPTIONS = [
@@ -65,6 +66,12 @@ export default function SettingsPage() {
   const updateProfileMutation = useUpdateProfile();
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
   const deleteSession = useDeleteSession();
+  const { data: ghStatus, isLoading: ghStatusLoading } = useGitHubInstallationStatus(selectedWorkspaceId ?? null);
+  const disconnectGh = useDisconnectGitHub(selectedWorkspaceId ?? "");
+  // Fallback so Connect GitHub works without .env.local
+  const githubInstallUrl =
+    process.env.NEXT_PUBLIC_GITHUB_APP_INSTALL_URL ||
+    "https://github.com/apps/repolens-dev/installations/new";
 
   React.useEffect(() => {
     setWorkspaceNameInput(selectedWorkspace?.name ?? "");
@@ -129,7 +136,7 @@ export default function SettingsPage() {
               <SettingRow label="Full name">
                 <Input
                   className="min-w-[200px] bg-background"
-                  value={displayProfile.fullName}
+                  value={displayProfile.fullName ?? ""}
                   onChange={(e) => updateProfile({ fullName: e.target.value })}
                 />
               </SettingRow>
@@ -139,22 +146,29 @@ export default function SettingsPage() {
               >
                 <Input
                   className="min-w-[200px] bg-background"
-                  value={displayProfile.username}
+                  value={displayProfile.username ?? ""}
                   onChange={(e) => updateProfile({ username: e.target.value })}
                 />
               </SettingRow>
               <SettingRow label="Save profile">
-                <Button
-                  onClick={() =>
-                    updateProfileMutation.mutate({
-                      fullName: displayProfile.fullName,
-                      username: displayProfile.username,
-                    })
-                  }
-                  disabled={updateProfileMutation.isPending}
-                >
-                  {updateProfileMutation.isPending ? "Saving…" : "Save"}
-                </Button>
+                  <Button
+                    onClick={() =>
+                      updateProfileMutation.mutate(
+                        {
+                          fullName: displayProfile.fullName ?? undefined,
+                          username: displayProfile.username ?? undefined,
+                        },
+                        {
+                          onSuccess: () => toast.success("Profile updated"),
+                          onError: (err) =>
+                            toast.error("Failed to update profile", (err as Error).message),
+                        }
+                      )
+                    }
+                    disabled={updateProfileMutation.isPending}
+                  >
+                    {updateProfileMutation.isPending ? "Saving…" : "Save"}
+                  </Button>
               </SettingRow>
             </>
           ) : null}
@@ -183,7 +197,12 @@ export default function SettingsPage() {
                       const name = workspaceNameInput.trim();
                       if (name && selectedWorkspaceId) {
                         updateWorkspaceMutation.mutate(name, {
-                          onSuccess: () => setWorkspaceNameInput(name),
+                          onSuccess: () => {
+                            setWorkspaceNameInput(name);
+                            toast.success("Workspace renamed");
+                          },
+                          onError: (err) =>
+                            toast.error("Failed to rename workspace", (err as Error).message),
                         });
                       }
                     }}
@@ -203,8 +222,8 @@ export default function SettingsPage() {
                 description="Schedule workspace to be permanently deleted"
               >
                 <Button
-                  variant="outline"
-                  className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  variant="destructive"
+                  className="font-medium"
                 >
                   Delete
                 </Button>
@@ -217,6 +236,77 @@ export default function SettingsPage() {
             >
               <span className="text-sm text-muted-foreground">No workspace selected</span>
             </SettingRow>
+          )}
+        </div>
+      </section>
+
+      {/* Connected accounts - GitHub */}
+      <section className="mt-10">
+        <h2 className="text-lg font-medium text-foreground">Connected accounts</h2>
+        <h3 className="mt-4 text-sm font-medium text-foreground">GitHub</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Connect the RepoLens GitHub App for this workspace to import repositories.
+        </p>
+        <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
+          {!selectedWorkspaceId ? (
+            <p className="text-sm text-muted-foreground">Select a workspace from the sidebar.</p>
+          ) : ghStatusLoading ? (
+            <div className="h-10 w-48 animate-pulse rounded bg-muted" />
+          ) : ghStatus?.connected && ghStatus.accountLogin ? (
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                  <Github className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">GitHub</p>
+                  <p className="text-xs text-muted-foreground">Connected as {ghStatus.accountLogin}</p>
+                </div>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="font-medium"
+                onClick={() =>
+                  disconnectGh.mutate(undefined, {
+                    onSuccess: () =>
+                      toast.success("GitHub disconnected"),
+                    onError: (err) =>
+                      toast.error("Failed to disconnect GitHub", (err as Error).message),
+                  })
+                }
+                disabled={disconnectGh.isPending}
+              >
+                {disconnectGh.isPending ? "Disconnecting…" : "Disconnect"}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                <Github className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">GitHub</p>
+                <p className="text-xs text-muted-foreground">Not connected</p>
+              </div>
+              {githubInstallUrl ? (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (!selectedWorkspaceId || !githubInstallUrl) return;
+                    try {
+                      const url = new URL(githubInstallUrl);
+                      url.searchParams.set("state", selectedWorkspaceId);
+                      window.location.href = url.toString();
+                    } catch (e) {
+                      console.error("Invalid GitHub install URL:", e);
+                    }
+                  }}
+                >
+                  Connect GitHub
+                </Button>
+              ) : null}
+            </div>
           )}
         </div>
       </section>
@@ -272,13 +362,20 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   className={cn(
-                    "shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10",
+                    "shrink-0 border-destructive/60 text-destructive hover:bg-destructive/15 hover:text-destructive font-medium",
                     session.isCurrent && "pointer-events-none opacity-50"
                   )}
-                  onClick={() => !session.isCurrent && deleteSession.mutate(session.id)}
+                  onClick={() =>
+                    !session.isCurrent &&
+                    deleteSession.mutate(session.id, {
+                      onSuccess: () => toast.success("Session revoked"),
+                      onError: (err) =>
+                        toast.error("Failed to revoke session", (err as Error).message),
+                    })
+                  }
                   disabled={session.isCurrent || deleteSession.isPending}
                   aria-label={`Revoke session ${session.browser} on ${session.os}`}
                 >

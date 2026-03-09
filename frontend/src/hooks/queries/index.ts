@@ -14,6 +14,10 @@ export {
   useRepository,
   useAddRepository,
   useDeleteRepository,
+  useGitHubInstallationStatus,
+  useGitHubRepositories,
+  useInstallGitHub,
+  useDisconnectGitHub,
 } from "./use-repositories";
 export type { Repository } from "./use-repositories";
 export { useProfile, useUpdateProfile } from "./use-profile";

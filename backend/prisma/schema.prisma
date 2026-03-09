@@ -27,6 +27,7 @@ model User {
   refreshTokens    RefreshToken[]
   otps             Otp[]
   workspaceMembers WorkspaceMember[]
+  githubInstallations GitHubInstallation[]
 
   @@map("users")
 }
@@ -84,8 +85,9 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members      WorkspaceMember[]
-  repositories Repository[]
+  members             WorkspaceMember[]
+  repositories        Repository[]
+  githubInstallations GitHubInstallation[]
 
   @@map("workspaces")
 }
@@ -106,6 +108,25 @@ model WorkspaceMember {
 }
 
 // ─────────────────────────────────────────
+// GITHUB INSTALLATION (App integration)
+// ─────────────────────────────────────────
+model GitHubInstallation {
+  id                   String   @id @default(cuid())
+  githubInstallationId Int
+  githubAccountLogin   String
+  githubAccountId      Int
+  userId               String
+  workspaceId          String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@map("github_installations")
+}
+
+// ─────────────────────────────────────────
 // REPOSITORY
 // ─────────────────────────────────────────
 model Repository {
@@ -117,6 +138,7 @@ model Repository {
   language    String?
   stars       Int?
   isPrivate   Boolean  @default(false)
+  status      RepoStatus @default(PENDING)
   analyzedAt  DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -127,6 +149,14 @@ model Repository {
 
   @@unique([workspaceId, owner, name])
   @@map("repositories")
+}
+
+enum RepoStatus {
+  PENDING
+  CLONING
+  ANALYZING
+  COMPLETED
+  FAILED
 }
 
 // ─────────────────────────────────────────

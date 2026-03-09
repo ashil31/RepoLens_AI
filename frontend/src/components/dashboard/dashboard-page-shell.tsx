@@ -40,7 +40,7 @@ export function DashboardPageShell({
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6">
       {/* Header: title, tabs, actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -89,7 +89,7 @@ export function DashboardPageShell({
       {/* Rounded content card – the "box with curve" */}
       <div
         className={cn(
-          "min-h-[320px] flex-1 rounded-2xl border border-border bg-card p-6 shadow-sm",
+          "min-h-[200px] flex-1 rounded-xl border border-border bg-card p-4 shadow-sm sm:min-h-[320px] sm:rounded-2xl sm:p-6",
           cardClassName
         )}
       >

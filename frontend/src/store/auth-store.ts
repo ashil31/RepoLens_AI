@@ -18,9 +18,12 @@ export interface AuthUser {
 interface AuthState {
   accessToken: string | null;
   user: AuthUser | null;
+  /** False until persist has rehydrated from localStorage (so we don't redirect to login on refresh) */
+  _hasHydrated: boolean;
   setAuth: (accessToken: string, user: AuthUser) => void;
   setAccessToken: (token: string) => void;
   setUser: (user: AuthUser | null) => void;
+  setHasHydrated: (value: boolean) => void;
   clearAuth: () => void;
   isAuthenticated: () => boolean;
 }
@@ -32,15 +35,21 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       accessToken: null,
       user: null,
+      _hasHydrated: false,
       setAuth: (accessToken, user) => set({ accessToken, user }),
       setAccessToken: (token) => set({ accessToken: token }),
       setUser: (user) => set({ user }),
+      setHasHydrated: (value) => set({ _hasHydrated: value }),
       clearAuth: () => set({ accessToken: null, user: null }),
       isAuthenticated: () => !!get().accessToken,
     }),
     {
       name: STORAGE_KEY,
       partialize: (s) => ({ accessToken: s.accessToken, user: s.user }),
+      onRehydrateStorage: () => (state, err) => {
+        if (err) return;
+        useAuthStore.getState().setHasHydrated(true);
+      },
     }
   )
 );

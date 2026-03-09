@@ -9,6 +9,10 @@ export const queryKeys = {
   repositories: (workspaceId: string) => ["workspaces", workspaceId, "repositories"] as const,
   repository: (workspaceId: string, repoId: string) =>
     ["workspaces", workspaceId, "repositories", repoId] as const,
+  githubInstallation: (workspaceId: string) =>
+    ["workspaces", workspaceId, "github", "installation"] as const,
+  githubRepositories: (workspaceId: string) =>
+    ["workspaces", workspaceId, "github", "repositories"] as const,
   profile: ["profile"] as const,
   sessions: ["sessions"] as const,
 };

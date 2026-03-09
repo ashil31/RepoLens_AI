@@ -13,6 +13,7 @@ import {
   FolderGit2,
   ChevronRight,
   Plus,
+  Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useRepositories } from "@/hooks/queries";
+import { useIsSidebarDesktop } from "@/hooks/use-is-sidebar-desktop";
+import { useSidebarMobileOptional } from "@/context/sidebar-mobile-context";
 
 const ROUTE_TITLES: Record<string, string> = {
   "/dashboard": "Overview",
@@ -59,6 +62,8 @@ function RepoSelectorSkeleton() {
 export function DashboardHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const isDesktop = useIsSidebarDesktop();
+  const sidebarMobile = useSidebarMobileOptional();
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false);
   const [search, setSearch] = useState("");
   const { data: repositories, isLoading, isError } = useRepositories();
@@ -87,9 +92,22 @@ export function DashboardHeader() {
   };
 
   return (
-    <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-border px-6">
-      {/* Left: Repository / Project selector */}
-      <Popover open={repoPopoverOpen} onOpenChange={setRepoPopoverOpen}>
+    <header className="relative flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-3 sm:px-6">
+      {/* Left: Mobile menu + Repository selector */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {!isDesktop && sidebarMobile && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Open sidebar"
+            onClick={() => sidebarMobile.openSidebar()}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        )}
+        <Popover open={repoPopoverOpen} onOpenChange={setRepoPopoverOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
@@ -211,9 +229,10 @@ export function DashboardHeader() {
           </div>
         </PopoverContent>
       </Popover>
+      </div>
 
       {/* Center: Dynamic title */}
-      <span className="absolute left-1/2 -translate-x-1/2 text-sm font-medium text-foreground">
+      <span className="absolute left-1/2 hidden max-w-[40vw] -translate-x-1/2 truncate text-sm font-medium text-foreground sm:block">
         {title}
       </span>
 

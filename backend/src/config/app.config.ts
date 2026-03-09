@@ -26,5 +26,14 @@ export const config = {
     JWT_REFRESH_EXPIRES_IN: refreshExpiresIn,
     /** Refresh token expiry in milliseconds (for cookie maxAge and DB expiresAt). */
     JWT_REFRESH_EXPIRES_MS: parseExpiryToMs(refreshExpiresIn),
-    DATABASE_URL: process.env.DATABASE_URL || ""
+    DATABASE_URL: process.env.DATABASE_URL || "",
+
+    // GitHub App (Module 4)
+    GITHUB_APP_ID: process.env.GITHUB_APP_ID || "",
+    GITHUB_PRIVATE_KEY: process.env.GITHUB_PRIVATE_KEY || "",
+    GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET || "",
+    GITHUB_APP_INSTALL_URL: process.env.GITHUB_APP_INSTALL_URL || "https://github.com/apps/repolens-dev/installations/new",
+    GITHUB_APP_CALLBACK_URL: process.env.GITHUB_APP_CALLBACK_URL || "http://localhost:3000/github/callback",
+    REPO_CLONE_DIR: process.env.REPO_CLONE_DIR || "",
+    REPO_CLONE_TIMEOUT_MS: process.env.REPO_CLONE_TIMEOUT ? parseInt(process.env.REPO_CLONE_TIMEOUT, 10) : 120_000
 }

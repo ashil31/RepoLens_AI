@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { register } from "@/services/auth.service";
+import { toast } from "@/lib/toast";
 import { ApiClientError } from "@/lib/api/client";
 
 export default function RegisterPage() {
@@ -23,9 +24,12 @@ export default function RegisterPage() {
     try {
       const res = await register({ email, password });
       setUserId(res.userId);
+      toast.success("Account created", "Check your email for a verification code.");
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Registration failed");
+      const msg = err instanceof ApiClientError ? err.message : "Registration failed";
+      setError(msg);
+      toast.error("Sign up failed", msg);
     } finally {
       setLoading(false);
     }
@@ -38,8 +42,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-      <h1 className="text-2xl font-semibold text-foreground">Sign up</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-8 sm:py-12">
+      <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Sign up</h1>
       <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
         <div>
           <label htmlFor="email" className="mb-1 block text-sm font-medium text-foreground">
@@ -103,18 +107,21 @@ function VerifyOtpStep({ userId, onBack }: { userId: string; onBack: () => void 
     try {
       const { verifyOtp } = await import("@/services/auth.service");
       await verifyOtp({ userId, code });
+      toast.success("Email verified", "You can now sign in.");
       router.push("/login");
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Verification failed");
+      const msg = err instanceof ApiClientError ? err.message : "Verification failed";
+      setError(msg);
+      toast.error("Verification failed", msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-      <h1 className="text-2xl font-semibold text-foreground">Verify your email</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-8 sm:py-12">
+      <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Verify your email</h1>
       <p className="text-center text-sm text-muted-foreground">
         We sent a 6-digit code to your email. Enter it below.
       </p>

@@ -19,10 +19,16 @@ interface AppState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   setSidebarWidth: (width: number) => void;
   resetSidebar: () => void;
+  sidebarMobileOpen: boolean;
+  setSidebarMobileOpen: (open: boolean) => void;
 
   // Selected workspace (for repos and context)
   selectedWorkspaceId: string | null;
   setSelectedWorkspaceId: (id: string | null) => void;
+
+  // Repo page: command palette actions (e.g. "Open architecture")
+  repoCommandAction: "open-architecture" | "export-report" | "focus-chat" | null;
+  setRepoCommandAction: (action: "open-architecture" | "export-report" | "focus-chat" | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -43,9 +49,14 @@ export const useAppStore = create<AppState>((set) => ({
       sidebarCollapsed: false,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
     }),
+  sidebarMobileOpen: false,
+  setSidebarMobileOpen: (open) => set({ sidebarMobileOpen: open }),
 
   selectedWorkspaceId: null,
   setSelectedWorkspaceId: (id) => set({ selectedWorkspaceId: id }),
+
+  repoCommandAction: null,
+  setRepoCommandAction: (action) => set({ repoCommandAction: action }),
 }));
 
 export { SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT_WIDTH };

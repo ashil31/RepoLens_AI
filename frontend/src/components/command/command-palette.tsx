@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Command,
   CommandDialog,
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useCurrentUser } from "@/hooks/queries";
+import { useAppStore } from "@/store";
 import * as Dialog from "@radix-ui/react-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
@@ -21,6 +22,9 @@ import {
   Sparkles,
   History,
   ChevronDown,
+  MessageCircle,
+  Network,
+  FileDown,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -35,7 +39,11 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? onOpenChange : setInternalOpen;
   const router = useRouter();
+  const pathname = usePathname();
+  const setRepoCommandAction = useAppStore((s) => s.setRepoCommandAction);
   const { user } = useCurrentUser();
+
+  const isRepoPage = pathname?.match(/^\/dashboard\/repositories\/[^/]+$/);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -100,6 +108,46 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
 
         <CommandList className="max-h-[320px] p-1">
           <CommandEmpty>No results found.</CommandEmpty>
+          {isRepoPage && (
+            <CommandGroup heading="This repository" className="[&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted-foreground">
+              <CommandItem
+                onSelect={() => run(() => setRepoCommandAction("focus-chat"))}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <MessageCircle className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">Ask RepoLens</p>
+                  <p className="truncate text-xs text-muted-foreground">Focus chat input</p>
+                </div>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => run(() => setRepoCommandAction("open-architecture"))}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <Network className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">Open architecture</p>
+                  <p className="truncate text-xs text-muted-foreground">View architecture graph</p>
+                </div>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => run(() => setRepoCommandAction("export-report"))}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <FileDown className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">Export report</p>
+                  <p className="truncate text-xs text-muted-foreground">Download markdown or PDF</p>
+                </div>
+              </CommandItem>
+            </CommandGroup>
+          )}
           <CommandGroup heading="Actions" className="[&_[cmdk-group-heading]]:sr-only">
             <CommandItem
               onSelect={() => run(() => router.push("/dashboard/repositories"))}

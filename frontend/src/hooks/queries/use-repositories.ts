@@ -56,8 +56,15 @@ export function useRepository(workspaceId: string | null, repoId: string | null)
 export function useAddRepository(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (githubUrl: string) =>
-      repositoryService.addRepository(workspaceId, { githubUrl }),
+    mutationFn: (input: string | { githubUrl: string } | { repositoryFullName: string }) => {
+      const data =
+        typeof input === "string"
+          ? { githubUrl: input }
+          : "repositoryFullName" in input
+            ? { repositoryFullName: input.repositoryFullName }
+            : { githubUrl: input.githubUrl };
+      return repositoryService.addRepository(workspaceId, data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repositories(workspaceId) });
     },
@@ -71,6 +78,57 @@ export function useDeleteRepository(workspaceId: string) {
       repositoryService.deleteRepository(workspaceId, repoId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repositories(workspaceId) });
+    },
+  });
+}
+
+// ── GitHub (workspace connection) ─────────────────────────────────────────────
+
+export function useGitHubInstallationStatus(workspaceId?: string | null) {
+  const selectedFromStore = useAppStore((s) => s.selectedWorkspaceId);
+  const effectiveWorkspaceId = workspaceId ?? selectedFromStore;
+
+  return useQuery({
+    queryKey: queryKeys.githubInstallation(effectiveWorkspaceId ?? ""),
+    queryFn: () => repositoryService.getGitHubInstallationStatus(effectiveWorkspaceId!),
+    enabled: !!effectiveWorkspaceId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useGitHubRepositories(workspaceId?: string | null) {
+  const selectedFromStore = useAppStore((s) => s.selectedWorkspaceId);
+  const effectiveWorkspaceId = workspaceId ?? selectedFromStore;
+
+  return useQuery({
+    queryKey: queryKeys.githubRepositories(effectiveWorkspaceId ?? ""),
+    queryFn: () => repositoryService.getGitHubRepositories(effectiveWorkspaceId!),
+    enabled: !!effectiveWorkspaceId,
+    staleTime: 1 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useInstallGitHub(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (installationId: number) =>
+      repositoryService.installGitHub(workspaceId, installationId),
+    onSuccess: (_, __, context) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.githubInstallation(workspaceId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.githubRepositories(workspaceId) });
+    },
+  });
+}
+
+export function useDisconnectGitHub(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => repositoryService.disconnectGitHub(workspaceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.githubInstallation(workspaceId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.githubRepositories(workspaceId) });
     },
   });
 }
