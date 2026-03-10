@@ -24,9 +24,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  refreshTokens    RefreshToken[]
-  otps             Otp[]
-  workspaceMembers WorkspaceMember[]
+  refreshTokens       RefreshToken[]
+  otps                Otp[]
+  workspaceMembers    WorkspaceMember[]
   githubInstallations GitHubInstallation[]
 
   @@map("users")
@@ -111,7 +111,7 @@ model WorkspaceMember {
 // GITHUB INSTALLATION (App integration)
 // ─────────────────────────────────────────
 model GitHubInstallation {
-  id                   String   @id @default(cuid())
+  id                   String    @id @default(cuid())
   githubInstallationId Int
   githubAccountLogin   String
   githubAccountId      Int
@@ -130,22 +130,28 @@ model GitHubInstallation {
 // REPOSITORY
 // ─────────────────────────────────────────
 model Repository {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   owner       String
   name        String
   description String?
   repoUrl     String? // Added this for easier cloning
   language    String?
   stars       Int?
-  isPrivate   Boolean  @default(false)
+  isPrivate   Boolean    @default(false)
   status      RepoStatus @default(PENDING)
-  analyzedAt  DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  analyzedAt  DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  documentation String? @db.Text
+  architecture  String? @db.Text
+  totalFiles    Int?
+  mainLanguage  String?
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  files RepositoryFile[]
+  files        RepositoryFile[]
+  analysisJobs AnalysisJob[]
 
   @@unique([workspaceId, owner, name])
   @@map("repositories")
@@ -157,6 +163,42 @@ enum RepoStatus {
   ANALYZING
   COMPLETED
   FAILED
+}
+
+model AnalysisJob {
+  id           String    @id @default(cuid())
+  repositoryId String
+  status       JobStatus @default(PENDING)
+  currentStep  JobStep?
+  progress     Int       @default(0)
+  error        String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  logs         Json? // Array of log strings
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId, status])
+  @@map("analysis_jobs")
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum JobStep {
+  FETCHING_REPO
+  DOWNLOADING_FILES
+  PARSING_CODE
+  BUILDING_GRAPH
+  EMBEDDING
+  GENERATING_AI
+  DONE
 }
 
 // ─────────────────────────────────────────

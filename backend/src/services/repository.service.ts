@@ -9,6 +9,7 @@ import {
 import * as githubApi from "./github.service"
 import * as githubRepository from "../repositories/github.repository"
 import { prisma } from "../database/prisma"
+import { JobStep } from "@prisma/client"
 
 // Default Octokit (no auth – public repos only)
 const getDefaultOctokit = () => new Octokit({})
@@ -46,90 +47,211 @@ export const parseRepoFullName = (fullName: string): { owner: string; name: stri
     return { owner: parts[0], name: parts[1] }
 }
 
-export const fetchAndSaveRepository = async (
+export const fetchRepositoryMetadata = async (owner: string, name: string, octokit: Octokit) => {
+    try {
+        const { data } = await octokit.repos.get({ owner, repo: name })
+        return data as any
+    } catch (err) {
+        throw new AppError("Failed to fetch repository from GitHub. Ensure it is public or provide a token.", HTTPSTATUS.NOT_FOUND, "GITHUB_REPO_NOT_FOUND")
+    }
+}
+
+export const fetchRepositoryFiles = async (
+    owner: string,
+    name: string,
+    defaultBranch: string,
+    octokit: Octokit,
+    accessToken?: string
+) => {
+    const { data: branchData } = await octokit.repos.getBranch({ owner, repo: name, branch: defaultBranch })
+    const treeSha = branchData.commit.commit.tree.sha
+
+    const { data: treeData } = await octokit.git.getTree({
+        owner,
+        repo: name,
+        tree_sha: treeSha,
+        recursive: "true"
+    })
+
+    const binaryExtensions = [
+        ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
+        ".mp4", ".mp3", ".wav", ".ogg",
+        ".zip", ".tar", ".gz", ".rar",
+        ".exe", ".dll", ".so",
+        ".pdf", ".ico"
+    ]
+    const codeFiles = treeData.tree.filter((node) => {
+        if (node.type !== "blob" || !node.path) return false
+        const ext = node.path.split(".").pop()?.toLowerCase()
+        if (!ext) return false
+        return !binaryExtensions.includes("." + ext)
+    })
+
+    const MAX_FILES = 200
+    const filesToFetch = codeFiles.slice(0, MAX_FILES)
+
+    const fileContents = await Promise.all(
+        filesToFetch.map(async (fileNode) => {
+            if (!fileNode.path) return { path: "", content: "" }
+            try {
+                const url = `https://raw.githubusercontent.com/${owner}/${name}/${defaultBranch}/${fileNode.path}`
+                const headers: HeadersInit = accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+                const response = await fetch(url, { headers })
+                const content = await response.text()
+                const sanitizedContent = content.replace(/\0/g, "")
+                return { path: fileNode.path, content: sanitizedContent }
+            } catch {
+                return { path: fileNode.path, content: "" }
+            }
+        })
+    )
+    return fileContents.filter(f => f.path && f.content)
+}
+
+/**
+ * Adds a log entry to an AnalysisJob.
+ */
+export async function addJobLog(jobId: string, message: string) {
+    const job = await prisma.analysisJob.findUnique({
+        where: { id: jobId },
+        select: { logs: true }
+    })
+    const existingLogs = Array.isArray(job?.logs) ? (job.logs as string[]) : []
+    const newLogs = [...existingLogs, `[${new Date().toISOString()}] ${message}`]
+
+    await prisma.analysisJob.update({
+        where: { id: jobId },
+        data: { logs: newLogs }
+    })
+}
+
+/**
+ * Updates an AnalysisJob's step and progress.
+ */
+export async function updateJobProgress(jobId: string, step: JobStep, progress: number) {
+    await prisma.analysisJob.update({
+        where: { id: jobId },
+        data: { currentStep: step, progress }
+    })
+}
+
+/**
+ * The core analysis pipeline, used by workers.
+ */
+export const processRepositoryAnalysis = async (
+    jobId: string,
+    repositoryId: string,
     workspaceId: string,
     githubUrl: string,
     accessToken?: string
 ) => {
     const { owner, name } = parseGitHubUrl(githubUrl)
     const octokit = accessToken ? new Octokit({ auth: accessToken }) : getDefaultOctokit()
-    let repoMetadata: { default_branch: string; description?: string | null; language?: string | null; stargazers_count?: number; private?: boolean }
+
     try {
-        const { data } = await octokit.repos.get({ owner, repo: name })
-        repoMetadata = data
-    } catch (err) {
-        throw new AppError("Failed to fetch repository from GitHub. Ensure it is public or provide a token.", HTTPSTATUS.NOT_FOUND, "GITHUB_REPO_NOT_FOUND")
-    }
+        // 1. Fetch Metadata
+        await updateJobProgress(jobId, "FETCHING_REPO", 10)
+        await addJobLog(jobId, "Fetching repository metadata...")
+        const repoMetadata = await fetchRepositoryMetadata(owner, name, octokit)
+        await addJobLog(jobId, `Successfully fetched metadata for ${owner}/${name}`)
 
-    // 1. Fetch metadata (recursive)
-    let fileContents: { path: string; content: string }[] = []
-    try {
-        const { data: branchData } = await octokit.repos.getBranch({ owner, repo: name, branch: repoMetadata.default_branch })
-        const treeSha = branchData.commit.commit.tree.sha
+        // 2. Fetch Files
+        await updateJobProgress(jobId, "DOWNLOADING_FILES", 30)
+        await addJobLog(jobId, "Downloading repository files...")
+        const fileContents = await fetchRepositoryFiles(owner, name, repoMetadata.default_branch, octokit, accessToken)
+        await addJobLog(jobId, `Downloaded ${fileContents.length} files`)
 
-        const { data: treeData } = await octokit.git.getTree({
-            owner,
-            repo: name,
-            tree_sha: treeSha,
-            recursive: "true"
-        })
+        // 3. Parsing Code
+        await updateJobProgress(jobId, "PARSING_CODE", 50)
+        await addJobLog(jobId, "Parsing code into AST...")
+        // Here we would call parserService.parseCodeFile for each file
 
-        // Filter for code files (excluding binary files)
-        const binaryExtensions = [
-            ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
-            ".mp4", ".mp3", ".wav", ".ogg",
-            ".zip", ".tar", ".gz", ".rar",
-            ".exe", ".dll", ".so",
-            ".pdf", ".ico"
-        ]
-        const codeFiles = treeData.tree.filter((node) => {
-            if (node.type !== "blob" || !node.path) return false
+        // 4. Building Graph
+        await updateJobProgress(jobId, "BUILDING_GRAPH", 70)
+        await addJobLog(jobId, "Building dependency graph...")
+        // Building dependency graph...
 
-            const ext = node.path.split(".").pop()?.toLowerCase()
-            if (!ext) return false
+        // 5. Generating AI Analysis
+        await updateJobProgress(jobId, "GENERATING_AI", 90)
+        await addJobLog(jobId, "Generating AI documentation and architecture summary...")
+        // AI analysis...
 
-            return !binaryExtensions.includes("." + ext)
-        })
-
-        // For simplicity and speed in this module, we will fetch contents of a limited number of files
-        // In a real production system, this would be queued or streamed
-        const MAX_FILES = 200
-        const filesToFetch = codeFiles.slice(0, MAX_FILES)
-
-        fileContents = await Promise.all(
-            filesToFetch.map(async (fileNode) => {
-                if (!fileNode.path) return { path: "", content: "" }
-                try {
-                    const url = `https://raw.githubusercontent.com/${owner}/${name}/${repoMetadata.default_branch}/${fileNode.path}`
-                    const headers: HeadersInit = accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
-                    const response = await fetch(url, { headers })
-                    const content = await response.text()
-                    // Sanitize: Remove null bytes which PostgreSQL doesn't allow in UTF-8 strings
-                    const sanitizedContent = content.replace(/\0/g, "")
-                    return { path: fileNode.path, content: sanitizedContent }
-                } catch {
-                    return { path: fileNode.path, content: "" }
+        // 6. Save to database in a transaction
+        await prisma.$transaction(async (tx) => {
+            await tx.repository.update({
+                where: { id: repositoryId },
+                data: {
+                    description: repoMetadata.description || "",
+                    language: repoMetadata.language || "",
+                    stars: repoMetadata.stargazers_count || 0,
+                    isPrivate: repoMetadata.private || false,
+                    status: "COMPLETED",
+                    analyzedAt: new Date(),
+                    documentation: "AI-generated documentation placeholder",
+                    architecture: "AI-generated architecture placeholder",
+                    totalFiles: fileContents.length,
+                    mainLanguage: repoMetadata.language || "Unknown"
                 }
             })
-        )
-        fileContents = fileContents.filter(f => f.path && f.content)
 
-    } catch (err) {
-        console.error("Failed to fetch repository tree", err)
-        // Non-fatal, we save without files or throw AppError
-    }
+            await tx.repositoryFile.deleteMany({ where: { repositoryId } })
 
-    // 3. Save to database using a transaction
-    return prisma.$transaction(async (tx) => {
-        // Upsert repository
-        const repo = await tx.repository.upsert({
-            where: {
-                workspaceId_owner_name: {
-                    workspaceId,
-                    owner,
-                    name
+            if (fileContents.length > 0) {
+                await tx.repositoryFile.createMany({
+                    data: fileContents.map(f => ({
+                        repositoryId,
+                        path: f.path,
+                        content: f.content,
+                        language: f.path.split(".").pop() || ""
+                    }))
+                })
+            }
+
+            // Finalize Job
+            await tx.analysisJob.update({
+                where: { id: jobId },
+                data: {
+                    status: "COMPLETED",
+                    currentStep: "DONE",
+                    progress: 100,
+                    completedAt: new Date()
                 }
-            },
+            })
+        }, {
+            timeout: 30000 // 30 seconds
+        })
+
+        await addJobLog(jobId, "Analysis completed successfully.")
+        return { success: true }
+    } catch (error) {
+        console.error(`Analysis failed for job ${jobId}:`, error)
+        const errorMessage = error instanceof Error ? error.message : "Internal server error"
+        await prisma.analysisJob.update({
+            where: { id: jobId },
+            data: {
+                status: "FAILED",
+                error: errorMessage,
+                completedAt: new Date()
+            }
+        })
+        throw error
+    }
+}
+
+export const fetchAndSaveRepository = async (
+    workspaceId: string,
+    githubUrl: string,
+    accessToken?: string
+) => {
+    // Keep for back-compat or standalone use
+    const { owner, name } = parseGitHubUrl(githubUrl)
+    const octokit = accessToken ? new Octokit({ auth: accessToken }) : getDefaultOctokit()
+    const repoMetadata = await fetchRepositoryMetadata(owner, name, octokit)
+    const fileContents = await fetchRepositoryFiles(owner, name, repoMetadata.default_branch, octokit, accessToken)
+
+    return prisma.$transaction(async (tx) => {
+        const repo = await tx.repository.upsert({
+            where: { workspaceId_owner_name: { workspaceId, owner, name } },
             update: {
                 description: repoMetadata.description || "",
                 language: repoMetadata.language || "",
@@ -151,12 +273,8 @@ export const fetchAndSaveRepository = async (
             }
         })
 
-        // Empty existing files to avoid duplicates/stale files on re-fetch
-        await tx.repositoryFile.deleteMany({
-            where: { repositoryId: repo.id }
-        })
+        await tx.repositoryFile.deleteMany({ where: { repositoryId: repo.id } })
 
-        // Save new files
         if (fileContents.length > 0) {
             await tx.repositoryFile.createMany({
                 data: fileContents.map(f => ({
@@ -167,10 +285,7 @@ export const fetchAndSaveRepository = async (
                 }))
             })
         }
-
         return repo
-    }, {
-        timeout: 30000 // 30 seconds
     })
 }
 

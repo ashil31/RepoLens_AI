@@ -13,10 +13,13 @@ import {
     getGitHubRepositories,
     getGitHubInstallationStatus,
     disconnectGitHub,
-    getInstallationTokenForWorkspace
+    getInstallationTokenForWorkspace,
+    parseGitHubUrl
 } from "../services/repository.service"
 import * as githubService from "../services/github.service"
 import * as githubRepository from "../repositories/github.repository"
+import { prisma } from "../database/prisma"
+import { addAnalysisJob } from "../services/analysis.queue"
 
 async function verifyWorkspaceAccess(workspaceId: string, userId: string) {
     if (!workspaceId) throw new AppError("Workspace ID required", HTTPSTATUS.BAD_REQUEST, "BAD_REQUEST")
@@ -36,24 +39,93 @@ export const addRepositoryHandler = catchAsync(async (req: Request, res: Respons
 
     await verifyWorkspaceAccess(workspaceId, userId)
 
-    let repo
+    let url = githubUrl
+    let accessToken: string | undefined
+
     if (repositoryFullName && typeof repositoryFullName === "string") {
         const token = await getInstallationTokenForWorkspace(workspaceId, userId)
         if (!token) {
             throw new AppError("Connect GitHub App for this workspace to import repositories.", HTTPSTATUS.BAD_REQUEST, "GITHUB_NOT_CONNECTED")
         }
+        accessToken = token
         const { owner, name } = parseRepoFullName(repositoryFullName)
-        const url = `https://github.com/${owner}/${name}`
-        repo = await fetchAndSaveRepository(workspaceId, url, token)
-    } else if (githubUrl && typeof githubUrl === "string") {
-        repo = await fetchAndSaveRepository(workspaceId, githubUrl)
-    } else {
+        url = `https://github.com/${owner}/${name}`
+    } else if (!githubUrl || typeof githubUrl !== "string") {
         throw new AppError("Either githubUrl or repositoryFullName is required", HTTPSTATUS.BAD_REQUEST, "BAD_REQUEST")
     }
 
+    const { owner, name } = parseGitHubUrl(url)
+
+    // 1. Check if a job is already in progress for this repo
+    const existingJob = await prisma.analysisJob.findFirst({
+        where: {
+            repository: {
+                workspaceId,
+                owner,
+                name
+            },
+            status: { in: ["PENDING", "PROCESSING"] }
+        }
+    })
+
+    if (existingJob) {
+        return res.status(HTTPSTATUS.OK).json({
+            message: "An analysis job is already in progress for this repository.",
+            data: {
+                repositoryId: existingJob.repositoryId,
+                jobId: existingJob.id
+            }
+        })
+    }
+
+    // 2. Create or Update Repository record (Status PENDING)
+    const repo = await prisma.repository.upsert({
+        where: {
+            workspaceId_owner_name: {
+                workspaceId,
+                owner,
+                name
+            }
+        },
+        update: {
+            status: "PENDING",
+            repoUrl: url
+        },
+        create: {
+            workspaceId,
+            owner,
+            name,
+            status: "PENDING",
+            repoUrl: url
+        }
+    })
+
+    // 3. Create Analysis Job record
+    const job = await prisma.analysisJob.create({
+        data: {
+            repositoryId: repo.id,
+            status: "PENDING",
+            currentStep: "FETCHING_REPO",
+            progress: 0
+        }
+    })
+
+    // 4. Add to Queue
+    await addAnalysisJob({
+        jobId: job.id,
+        repositoryId: repo.id,
+        workspaceId,
+        userId,
+        githubUrl: url,
+        accessToken
+    })
+
     res.status(HTTPSTATUS.CREATED).json({
-        message: "Repository added and analyzed successfully",
-        data: repo
+        message: "Repository added and analysis started",
+        data: {
+            repository: repo,
+            jobId: job.id
+        }
     })
 })
 
@@ -144,7 +216,7 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
         res.status(HTTPSTATUS.UNAUTHORIZED).send("Invalid signature")
         return
     }
-    let payload: { action?: string; installation?: { id: number }; [k: string]: unknown }
+    let payload: { action?: string; installation?: { id: number };[k: string]: unknown }
     try {
         payload = JSON.parse(rawBody.toString("utf8"))
     } catch {
