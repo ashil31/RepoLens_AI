@@ -150,8 +150,9 @@ model Repository {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  files        RepositoryFile[]
-  analysisJobs AnalysisJob[]
+  files           RepositoryFile[]
+  analysisJobs    AnalysisJob[]
+  dependencies    RepositoryDependency[]
 
   @@unique([workspaceId, owner, name])
   @@map("repositories")
@@ -210,8 +211,10 @@ model RepositoryFile {
   language  String?
   content   String?  @db.Text
   tokenSize Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  symbols    Json?
+  chunkCount Int?
 
   repositoryId String
   repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
@@ -237,4 +240,18 @@ model CodeEmbedding {
   file   RepositoryFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
 
   @@map("code_embeddings")
+}
+
+// ─────────────────────────────────────────
+// REPOSITORY DEPENDENCY
+// ─────────────────────────────────────────
+model RepositoryDependency {
+  id           String     @id @default(cuid())
+  sourcePath   String
+  targetPath   String
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, sourcePath, targetPath])
+  @@map("repository_dependencies")
 }
