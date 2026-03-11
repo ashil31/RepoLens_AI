@@ -14,7 +14,16 @@ const worker = new Worker(
         console.log(`[Worker] Processing job ${jobId} for repo ${repositoryId}`)
 
         try {
-            // 1. Mark job as PROCESSING
+            // 1. Check if job exists and mark as PROCESSING
+            const jobRecord = await prisma.analysisJob.findUnique({
+                where: { id: jobId }
+            })
+
+            if (!jobRecord) {
+                console.warn(`[Worker] Job ${jobId} not found in database. It might have been rolled back. Skipping.`)
+                return
+            }
+
             await prisma.analysisJob.update({
                 where: { id: jobId },
                 data: {
