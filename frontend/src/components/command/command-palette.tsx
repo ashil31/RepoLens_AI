@@ -25,6 +25,8 @@ import {
   MessageCircle,
   Network,
   FileDown,
+  FileText,
+  Share2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -123,6 +125,30 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
                 </div>
               </CommandItem>
               <CommandItem
+                onSelect={() => run(() => setRepoCommandAction("open-files"))}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <Search className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">Search files</p>
+                  <p className="truncate text-xs text-muted-foreground">Open file tree</p>
+                </div>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => run(() => setRepoCommandAction("open-docs"))}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">Open docs</p>
+                  <p className="truncate text-xs text-muted-foreground">View documentation</p>
+                </div>
+              </CommandItem>
+              <CommandItem
                 onSelect={() => run(() => setRepoCommandAction("open-architecture"))}
                 className="flex items-center gap-3 rounded-lg px-3 py-2.5"
               >
@@ -132,6 +158,18 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">Open architecture</p>
                   <p className="truncate text-xs text-muted-foreground">View architecture graph</p>
+                </div>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => run(() => setRepoCommandAction("share-report"))}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <Share2 className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">Share report</p>
+                  <p className="truncate text-xs text-muted-foreground">Copy link or export</p>
                 </div>
               </CommandItem>
               <CommandItem

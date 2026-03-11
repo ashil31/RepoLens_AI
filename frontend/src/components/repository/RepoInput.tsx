@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAppStore } from "@/store";
 import { cn } from "@/lib/utils";
 
 const SUGGESTIONS = [
@@ -30,6 +31,11 @@ export function RepoInput({
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const focusChatRequest = useAppStore((s) => s.focusChatRequest);
+
+  useEffect(() => {
+    if (focusChatRequest > 0) inputRef.current?.focus();
+  }, [focusChatRequest]);
 
   const handleSubmit = () => {
     const v = value.trim();
@@ -39,7 +45,9 @@ export function RepoInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    const isMac = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if (e.key === "Enter" && (mod || !e.shiftKey)) {
       e.preventDefault();
       handleSubmit();
     }

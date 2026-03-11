@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, FileCode, Network } from "lucide-react";
+import { FileText, FileCode, Network, BarChart3 } from "lucide-react";
 import { RepoMarkdownDoc } from "./RepoMarkdownDoc";
 import { RepoFilePreview } from "./RepoFilePreview";
 import { RepoArchitectureGraph } from "./RepoArchitectureGraph";
+import { RepoInsights } from "./RepoInsights";
 import { cn } from "@/lib/utils";
 
-type PreviewMode = "docs" | "files" | "architecture";
+type PreviewMode = "docs" | "files" | "architecture" | "insights";
 
 type RepoPreviewPanelProps = {
   docContent: string;
@@ -24,6 +25,7 @@ const TABS: { id: PreviewMode; label: string; icon: typeof FileText }[] = [
   { id: "docs", label: "Docs", icon: FileText },
   { id: "files", label: "Files", icon: FileCode },
   { id: "architecture", label: "Architecture", icon: Network },
+  { id: "insights", label: "Insights", icon: BarChart3 },
 ];
 
 export function RepoPreviewPanel({
@@ -107,6 +109,18 @@ export function RepoPreviewPanel({
               className="h-full min-h-[320px] overflow-hidden p-4"
             >
               <RepoArchitectureGraph />
+            </motion.div>
+          )}
+          {mode === "insights" && (
+            <motion.div
+              key="insights"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full overflow-hidden"
+            >
+              <RepoInsights files={files} className="h-full" />
             </motion.div>
           )}
         </AnimatePresence>

@@ -57,7 +57,7 @@ export default function RepoPage({ params }: PageProps) {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState<"docs" | "files" | "architecture">("docs");
+  const [previewMode, setPreviewMode] = useState<"docs" | "files" | "architecture" | "insights">("docs");
   const [mobilePanel, setMobilePanel] = useState<"chat" | "docs">("chat");
   const [isAnalyzing] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
@@ -66,6 +66,7 @@ export default function RepoPage({ params }: PageProps) {
 
   const repoCommandAction = useAppStore((s) => s.repoCommandAction);
   const setRepoCommandAction = useAppStore((s) => s.setRepoCommandAction);
+  const requestFocusChat = useAppStore((s) => s.requestFocusChat);
 
   useEffect(() => {
     if (!repoCommandAction) return;
@@ -73,9 +74,12 @@ export default function RepoPage({ params }: PageProps) {
     setRepoCommandAction(null);
     queueMicrotask(() => {
       if (action === "open-architecture") setPreviewMode("architecture");
-      if (action === "export-report") setShareOpen(true);
+      if (action === "open-docs") setPreviewMode("docs");
+      if (action === "open-files") setPreviewMode("files");
+      if (action === "share-report" || action === "export-report") setShareOpen(true);
+      if (action === "focus-chat") requestFocusChat();
     });
-  }, [repoCommandAction, setRepoCommandAction]);
+  }, [repoCommandAction, setRepoCommandAction, requestFocusChat]);
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
   const displayMessages = activeConversation ? activeConversation.messages : messages;

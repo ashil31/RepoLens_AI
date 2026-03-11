@@ -15,6 +15,7 @@ import {
   BackgroundVariant,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import "./RepoArchitectureGraph.module.css";
 import { cn } from "@/lib/utils";
 
 type RepoArchitectureGraphProps = {
@@ -54,7 +55,7 @@ export function RepoArchitectureGraph({
   );
 
   return (
-    <div className={cn("h-full w-full rounded-lg border border-border bg-card", className)}>
+    <div className={cn("repoArchitectureGraph", "h-full w-full rounded-lg border border-border bg-card", className)}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -65,12 +66,12 @@ export function RepoArchitectureGraph({
         className="rounded-lg"
       >
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
-        <Controls className="border-border! bg-card! text-foreground! [&>button]:border-border! [&>button]:bg-card! [&>button]:text-foreground!" />
-        {/* <MiniMap
-          className="bg-muted! border-border!"
-          nodeColor="var(--color-muted)"
-          maskColor="var(--background)"
-        /> */}
+        <Controls />
+        <MiniMap
+          className="repolensArchitectureMinimap"
+          nodeColor="hsl(var(--primary))"
+          maskColor="hsl(var(--background) / 0.6)"
+        />
       </ReactFlow>
     </div>
   );

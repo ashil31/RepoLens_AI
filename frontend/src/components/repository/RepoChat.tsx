@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquarePlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { RepoMessages, type ChatMessage } from "./RepoMessages";
@@ -47,6 +47,25 @@ export function RepoChat({
 }: RepoChatProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const showSidebar = conversations.length > 0 || onNewChat;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (e.key === "c" && mod && e.shiftKey) {
+        e.preventDefault();
+        onNewChat?.();
+        return;
+      }
+      if (e.key === "b" && mod) {
+        e.preventDefault();
+        if (showSidebar) setSidebarOpen((prev) => !prev);
+        return;
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onNewChat, showSidebar]);
 
   return (
     <div

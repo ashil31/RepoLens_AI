@@ -27,8 +27,12 @@ interface AppState {
   setSelectedWorkspaceId: (id: string | null) => void;
 
   // Repo page: command palette actions (e.g. "Open architecture")
-  repoCommandAction: "open-architecture" | "export-report" | "focus-chat" | null;
-  setRepoCommandAction: (action: "open-architecture" | "export-report" | "focus-chat" | null) => void;
+  repoCommandAction: "open-architecture" | "export-report" | "focus-chat" | "open-docs" | "share-report" | "open-files" | null;
+  setRepoCommandAction: (action: AppState["repoCommandAction"]) => void;
+
+  // Repo chat: focus input (trigger from Cmd+K "Ask RepoLens")
+  focusChatRequest: number;
+  requestFocusChat: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -57,6 +61,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   repoCommandAction: null,
   setRepoCommandAction: (action) => set({ repoCommandAction: action }),
+
+  focusChatRequest: 0,
+  requestFocusChat: () => set((s) => ({ focusChatRequest: s.focusChatRequest + 1 })),
 }));
 
 export { SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT_WIDTH };

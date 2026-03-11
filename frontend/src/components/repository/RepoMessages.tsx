@@ -67,7 +67,7 @@ function MessageContent({
         key={m.index}
         type="button"
         onClick={() => onFileClick(path)}
-        className="inline-flex items-center rounded bg-primary/15 px-1.5 py-0.5 font-mono text-xs text-primary hover:bg-primary/25"
+        className="inline-flex items-center rounded-md bg-muted px-2 py-1 font-mono text-xs text-foreground hover:bg-muted/80"
       >
         {path}
       </button>
@@ -118,7 +118,8 @@ export function RepoMessages({
               RepoLens
             </div>
             <div className="whitespace-pre-wrap wrap-break-word">
-              {streamingContent || "..."}
+              {streamingContent}
+              <span className="animate-pulse" aria-hidden>|</span>
             </div>
           </div>
         </motion.div>
@@ -218,13 +219,13 @@ function MessageBubble({
         {msg.files && msg.files.length > 0 && (
           <div className="mt-2 border-t border-border/50 pt-2">
             <div className="text-xs text-muted-foreground">Files involved:</div>
-            <ul className="mt-1 flex flex-wrap gap-1">
+            <ul className="mt-1 flex flex-wrap gap-1.5">
               {msg.files.map((f) => (
                 <li key={f}>
                   <button
                     type="button"
                     onClick={() => onFileClick?.(f)}
-                    className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-xs text-primary hover:bg-primary/25"
+                    className="rounded-md bg-muted px-2 py-1 font-mono text-xs text-foreground hover:bg-muted/80"
                   >
                     {f}
                   </button>

@@ -194,7 +194,7 @@ export function RepoMarkdownDoc({ content, className }: RepoMarkdownDocProps) {
           <div key={i}>{renderBlock(block)}</div>
         ))}
       </article>
-      {toc.length > 0 && (
+      {/* {toc.length > 0 && (
         <nav
           className="hidden shrink-0 border-t border-border pt-4 lg:block lg:w-48 lg:border-t-0 lg:pt-6"
           aria-label="Table of contents"
@@ -219,7 +219,7 @@ export function RepoMarkdownDoc({ content, className }: RepoMarkdownDocProps) {
             </ul>
           </div>
         </nav>
-      )}
+      )} */}
     </div>
   );
 }

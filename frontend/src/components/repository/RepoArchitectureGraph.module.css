@@ -1,0 +1,66 @@
+/* Architecture graph: visible Controls and MiniMap in light and dark theme */
+
+:global(.repoArchitectureGraph) .react-flow__controls {
+  box-shadow: 0 0 0 1px hsl(var(--border)), 0 2px 8px hsl(var(--foreground) / 0.06);
+  background: hsl(var(--card)) !important;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:global(.repoArchitectureGraph) .react-flow__controls-button {
+  border: none !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  box-sizing: content-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  padding: 5px;
+}
+
+:global(.repoArchitectureGraph) .react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+:global(.repoArchitectureGraph) .react-flow__controls-button:hover {
+  background: hsl(var(--muted)) !important;
+}
+
+:global(.repoArchitectureGraph) .react-flow__controls-button svg {
+  width: 100%;
+  max-width: 12px;
+  max-height: 12px;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+:global(.repoArchitectureGraph) .react-flow__controls-button:disabled {
+  opacity: 0.5;
+}
+
+:global(.repoArchitectureGraph) .react-flow__controls-button:disabled svg {
+  fill-opacity: 0.5;
+}
+
+:global(.repoArchitectureGraph) .react-flow__minimap svg {
+  display: block;
+  border-radius: 7px;
+}
+
+/* Direct class on MiniMap so it's always visible (works even if rendered in portal) */
+:global(.repolensArchitectureMinimap) {
+  background-color: hsl(var(--card)) !important;
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 0 1px hsl(var(--border)), 0 4px 12px hsl(var(--foreground) / 0.08) !important;
+}
+
+:global(.repolensArchitectureMinimap) svg {
+  display: block !important;
+  border-radius: 7px !important;
+}

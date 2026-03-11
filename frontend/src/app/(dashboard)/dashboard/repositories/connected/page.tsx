@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   DashboardPageShell,
   type TabItem,
@@ -49,10 +50,20 @@ function RepoStatusIcon({ repo }: { repo: Repository }) {
 }
 
 function RepoCardGrid({ repo }: { repo: Repository }) {
+  const router = useRouter();
   const displayUrl = repo.fullName ?? repo.repoUrl ?? "—";
+  const href = `/dashboard/repositories/${repo.id}`;
   return (
-    <Link
-      href={`/dashboard/repositories/${repo.id}`}
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(href)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(href);
+        }
+      }}
       className="group flex min-w-0 cursor-pointer flex-col rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-accent hover:border-border"
     >
       <div className="flex items-start justify-between gap-2">
@@ -75,7 +86,10 @@ function RepoCardGrid({ repo }: { repo: Repository }) {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 cursor-pointer"
-                onClick={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 aria-label="More options"
               >
                 <MoreHorizontal className="h-4 w-4" />
@@ -134,15 +148,25 @@ function RepoCardGrid({ repo }: { repo: Repository }) {
           <span>—</span>
         )}
       </div>
-    </Link>
+    </div>
   );
 }
 
 function RepoRowList({ repo }: { repo: Repository }) {
+  const router = useRouter();
   const displayUrl = repo.fullName ?? repo.repoUrl ?? "—";
+  const href = `/dashboard/repositories/${repo.id}`;
   return (
-    <Link
-      href={`/dashboard/repositories/${repo.id}`}
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(href)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(href);
+        }
+      }}
       className="flex cursor-pointer flex-col gap-3 border-b border-border py-4 px-2 last:border-b-0 hover:bg-accent/50 sm:flex-row sm:items-center sm:gap-6 sm:px-4 sm:py-4"
     >
       {/* Left: icon + name + path */}
@@ -185,7 +209,10 @@ function RepoRowList({ repo }: { repo: Repository }) {
               variant="ghost"
               size="icon"
               className="h-8 w-8 shrink-0 cursor-pointer"
-              onClick={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
               aria-label="More options"
             >
               <MoreHorizontal className="h-4 w-4" />
@@ -211,7 +238,7 @@ function RepoRowList({ repo }: { repo: Repository }) {
           </PopoverContent>
         </Popover>
       </div>
-    </Link>
+    </div>
   );
 }
 

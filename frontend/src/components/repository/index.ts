@@ -8,3 +8,4 @@ export { RepoFilePreview } from "./RepoFilePreview";
 export { RepoArchitectureGraph } from "./RepoArchitectureGraph";
 export { RepoShareDialog } from "./RepoShareDialog";
 export { RepoResizableLayout } from "./RepoResizableLayout";
+export { RepoInsights } from "./RepoInsights";
