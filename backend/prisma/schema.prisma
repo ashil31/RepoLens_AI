@@ -115,7 +115,8 @@ model Repository {
   analysisJobs  AnalysisJob[]
   workspace     Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   dependencies  RepositoryDependency[]
-  files         RepositoryFile[]
+  files                RepositoryFile[]
+  repositoryEmbedding  RepositoryEmbedding?
 
   @@unique([workspaceId, owner, name])
   @@map("repositories")
@@ -158,16 +159,31 @@ model RepositoryFile {
 }
 
 model CodeEmbedding {
-  id        String                 @id @default(cuid())
-  chunk     String
-  startLine Int?
-  endLine   Int?
-  createdAt DateTime               @default(now())
-  fileId    String
-  embedding Unsupported("vector")?
-  file      RepositoryFile         @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  id         String                 @id @default(cuid())
+  chunk      String
+  embedding  Unsupported("vector(768)")?
+  startLine  Int?
+  endLine    Int?
+  createdAt  DateTime               @default(now())
+  fileId     String
+  symbolName String?
+  language   String?
+  file       RepositoryFile         @relation(fields: [fileId], references: [id], onDelete: Cascade)
 
+  @@index([fileId])
   @@map("code_embeddings")
+}
+
+model RepositoryEmbedding {
+  id           String                 @id @default(cuid())
+  repositoryId String                 @unique
+  summary      String
+  embedding    Unsupported("vector(768)")
+  createdAt    DateTime               @default(now())
+  repository   Repository             @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId])
+  @@map("repository_embeddings")
 }
 
 model RepositoryDependency {

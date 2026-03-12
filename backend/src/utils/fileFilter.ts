@@ -5,6 +5,16 @@ export const DEFAULT_IGNORED_DIRECTORIES = [
     '.git',
     'coverage',
     'public',
+    '.next',
+    '.venv',
+    '.turbo',
+];
+
+export const DEFAULT_IGNORED_FILES = [
+    'package-lock.json',
+    'yarn.lock',
+    'pnpm-lock.yaml',
+    'tsconfig.json',
 ];
 
 export const DEFAULT_INCLUDED_DIRECTORIES = [
@@ -32,7 +42,8 @@ export interface FilterOptions {
  * @returns Array of filtered file paths strings
  */
 export const filterFiles = (filePaths: string[], options?: FilterOptions): string[] => {
-    const ignored = [...DEFAULT_IGNORED_DIRECTORIES, ...(options?.extraIgnored || [])];
+    const ignoredDirs = [...DEFAULT_IGNORED_DIRECTORIES, ...(options?.extraIgnored || [])];
+    const ignoredFiles = [...DEFAULT_IGNORED_FILES];
     const included = [...DEFAULT_INCLUDED_DIRECTORIES, ...(options?.extraIncluded || [])];
     const isStrict = options?.strictInclude ?? false; // Default to false so it includes everything not ignored
 
@@ -40,14 +51,20 @@ export const filterFiles = (filePaths: string[], options?: FilterOptions): strin
         // Normalize path separators to forward slashes for consistent checking
         const normalizedPath = filePath.replace(/\\/g, '/');
         const pathSegments = normalizedPath.split('/');
+        const fileName = pathSegments[pathSegments.length - 1];
 
-        // 1. Check if the file is in any of the ignored directories
-        const isIgnored = ignored.some((dir) => pathSegments.includes(dir));
-        if (isIgnored) {
+        // 1. Check if the file name is in the ignored files list
+        if (ignoredFiles.includes(fileName)) {
+            return false;
+        }
+
+        // 2. Check if the file is in any of the ignored directories
+        const isIgnoredDir = ignoredDirs.some((dir) => pathSegments.includes(dir));
+        if (isIgnoredDir) {
             return false; // Always drop ignored files
         }
 
-        // 2. If we are in strict mode, ensure it matches at least one included directory
+        // 3. If we are in strict mode, ensure it matches at least one included directory
         if (isStrict && included.length > 0) {
             const isIncluded = included.some((dir) => pathSegments.includes(dir));
             if (!isIncluded) {

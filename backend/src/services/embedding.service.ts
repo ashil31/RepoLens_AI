@@ -10,8 +10,8 @@ const LOCAL_EMBEDDING_URL = "http://localhost:8001/embed"
 export async function generateBatchedEmbeddings(chunks: string[]): Promise<number[][]> {
     if (!chunks.length) return []
 
-    const SUB_BATCH_SIZE = 50
-    const CONCURRENCY_LIMIT = 4
+    const SUB_BATCH_SIZE = 100
+    const CONCURRENCY_LIMIT = 6
     const totalBatches = Math.ceil(chunks.length / SUB_BATCH_SIZE)
 
     console.log(`[EmbeddingService] Processing ${chunks.length} chunks in ${totalBatches} sub-batches with concurrency ${CONCURRENCY_LIMIT}...`)

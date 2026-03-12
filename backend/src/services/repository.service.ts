@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/rest"
+import * as nodeCrypto from "crypto"
 import { AppError } from "../utils/appError"
 import { HTTPSTATUS } from "../config/http.config"
 import {
@@ -82,7 +83,7 @@ export const fetchRepositoryFiles = async (
     const allPaths = treeData.tree
         .filter(node => node.type === "blob" && node.path)
         .map(node => node.path as string)
-    
+
     const filteredPaths = filterFiles(allPaths)
 
     const binaryExtensions = [
@@ -92,7 +93,7 @@ export const fetchRepositoryFiles = async (
         ".exe", ".dll", ".so",
         ".pdf", ".ico"
     ]
-    
+
     const codeFiles = treeData.tree.filter((node) => {
         if (node.type !== "blob" || !node.path) return false
         if (!filteredPaths.includes(node.path)) return false
@@ -162,6 +163,10 @@ export const processRepositoryAnalysis = async (
     const { owner, name } = parseGitHubUrl(githubUrl)
     const octokit = accessToken ? new Octokit({ auth: accessToken }) : getDefaultOctokit()
 
+    const MAX_TOTAL_LINES = 100000
+    const MAX_FILE_LINES = 5000
+    let totalLinesProcessed = 0
+
     try {
         // 1. Fetch Metadata
         await updateJobProgress(jobId, "FETCHING_REPO", 5)
@@ -175,20 +180,41 @@ export const processRepositoryAnalysis = async (
         const fileContents = await fetchRepositoryFiles(owner, name, repoMetadata.default_branch, octokit, accessToken)
         await addJobLog(jobId, `Downloaded ${fileContents.length} files`)
 
-        // 3. Parsing Code & Symbol Extraction
+        // 3. Parsing Code & Symbol Extraction (Parallelized with limits)
         await updateJobProgress(jobId, "PARSING_CODE", 25)
         await addJobLog(jobId, "Parsing code and extracting symbols...")
-        const parsedFiles = fileContents.map(file => ({
-            ...file,
-            meta: parseCodeFile(file.path, file.content)
-        }))
+
+        const filteredFiles = fileContents.filter(f => {
+            const lines = f.content.split("\n")
+            if (lines.length > MAX_FILE_LINES) {
+                addJobLog(jobId, `Skipping large file: ${f.path} (${lines.length} lines)`)
+                return false
+            }
+            if (totalLinesProcessed + lines.length > MAX_TOTAL_LINES) {
+                return false
+            }
+            totalLinesProcessed += lines.length
+            return true
+        })
+
+        if (totalLinesProcessed >= MAX_TOTAL_LINES) {
+            await addJobLog(jobId, `Total line limit reached (${MAX_TOTAL_LINES}). Some files were skipped.`)
+        }
+
+        const parsedFiles = await Promise.all(
+            filteredFiles.map(async file => ({
+                ...file,
+                meta: parseCodeFile(file.path, file.content)
+            }))
+        )
+
         const allSymbols = parsedFiles.flatMap(f => f.meta.symbols.map(s => ({ ...s, filePath: f.path })))
         await addJobLog(jobId, `Extracted ${allSymbols.length} symbols from ${parsedFiles.length} files`)
 
         // 4. Building Graph
         await updateJobProgress(jobId, "BUILDING_GRAPH", 35)
         await addJobLog(jobId, "Building dependency graph...")
-        
+
         const dependencies: { sourcePath: string; targetPath: string }[] = []
         parsedFiles.forEach(file => {
             file.meta.imports.forEach(imp => {
@@ -201,95 +227,8 @@ export const processRepositoryAnalysis = async (
             })
         })
 
-        // 5. Semantic Chunking
-        await updateJobProgress(jobId, "PARSING_CODE", 45)
-        await addJobLog(jobId, "Splitting code into semantic chunks...")
-        const fileChunks = parsedFiles.map(file => ({
-            path: file.path,
-            chunks: chunkCode(file.content, file.meta.symbols)
-        }))
-        const totalChunksCount = fileChunks.reduce((acc, f) => acc + f.chunks.length, 0)
-        await addJobLog(jobId, `Created ${totalChunksCount} semantic chunks`)
-
-        // 6. Embedding Generation
-        await updateJobProgress(jobId, "EMBEDDING", 60)
-        await addJobLog(jobId, "Generating vector embeddings (batched)...")
-        const allChunksTexts = fileChunks.flatMap(f => f.chunks.map(c => c.content))
-        const embeddings = await generateBatchedEmbeddings(allChunksTexts)
-        await addJobLog(jobId, `Successfully generated ${embeddings.length} embeddings`)
-
-        // 7. Generating AI Analysis
-        await updateJobProgress(jobId, "GENERATING_AI", 80)
-        await addJobLog(jobId, "Generating AI documentation and architecture summary...")
-        
-        const overview = await AIService.generateRepositoryOverview({
-            symbols: allSymbols,
-            dependencies: dependencies
-        })
-        
-        // Small delay to prevent rate limiting for generative models
-        await new Promise(resolve => setTimeout(resolve, 2000))
-
-        const architecture = await AIService.generateArchitectureAnalysis({
-            symbols: allSymbols,
-            dependencies: dependencies
-        })
-
-        // 8. Prepare data for bulk insertion
-        const fileData = parsedFiles.map(f => ({
-            id: crypto.randomUUID(),
-            repositoryId,
-            path: f.path,
-            content: f.content,
-            language: f.meta.language,
-            symbols: f.meta.symbols as any,
-            chunkCount: fileChunks.find(fc => fc.path === f.path)?.chunks.length || 0
-        }))
-
-        // Collect all embeddings across all files for one large bulk insert
-        const allEmbeddingRecords: any[] = []
-        let currentEmbeddingIndex = 0
-        
-        for (const f of parsedFiles) {
-            const chunks = fileChunks.find(fc => fc.path === f.path)?.chunks || []
-            const fileId = fileData.find(fd => fd.path === f.path)?.id
-            if (!fileId) continue
-
-            if (chunks.length > 0) {
-                const batchEmbeddings = embeddings.slice(currentEmbeddingIndex, currentEmbeddingIndex + chunks.length)
-                for (let j = 0; j < chunks.length; j++) {
-                    allEmbeddingRecords.push({
-                        id: crypto.randomUUID(),
-                        chunk: chunks[j].content,
-                        embedding: batchEmbeddings[j],
-                        startLine: chunks[j].startLine,
-                        endLine: chunks[j].endLine,
-                        fileId
-                    })
-                }
-                currentEmbeddingIndex += chunks.length
-            }
-        }
-
-        // 9. Save to database sequentially (More resilient to poolers)
-        // Update repo metadata
-        await prisma.repository.update({
-            where: { id: repositoryId },
-            data: {
-                description: repoMetadata.description || "",
-                language: repoMetadata.language || "",
-                stars: repoMetadata.stargazers_count || 0,
-                isPrivate: repoMetadata.private || false,
-                status: "COMPLETED",
-                analyzedAt: new Date(),
-                documentation: overview,
-                architecture: architecture,
-                totalFiles: fileContents.length,
-                mainLanguage: repoMetadata.language || "Unknown"
-            }
-        })
-
-        // Clear old data fast
+        // 5. Clear old data (before streaming new data)
+        await addJobLog(jobId, "Clearing old repository data...")
         const existingFiles = await prisma.repositoryFile.findMany({ where: { repositoryId }, select: { id: true } })
         const fileIds = existingFiles.map(f => f.id)
         if (fileIds.length > 0) {
@@ -298,31 +237,193 @@ export const processRepositoryAnalysis = async (
         }
         await prisma.repositoryDependency.deleteMany({ where: { repositoryId } })
 
-        // Bulk Create Files
-        if (fileData.length > 0) {
-            await prisma.repositoryFile.createMany({ data: fileData })
+        // 6. Streaming: Chunking, Embedding & Saving (Per File)
+        // 6. Streaming: Chunking, Buffering, Embedding & Saving
+        await updateJobProgress(jobId, "EMBEDDING", 50)
+        await addJobLog(jobId, "Processing files with buffered embedding pipeline...")
+
+        const CHUNK_BATCH_TARGET = 200
+
+        type BufferedChunk = {
+            chunk: any
+            fileId: string
+            language: string
         }
 
-        // Bulk Create Embeddings in batches of 100 to avoid query size limits
-        const EMBED_BATCH_SIZE = 100
-        for (let i = 0; i < allEmbeddingRecords.length; i += EMBED_BATCH_SIZE) {
-            const subBatch = allEmbeddingRecords.slice(i, i + EMBED_BATCH_SIZE)
-            const values: string[] = []
+        let chunkBuffer: string[] = []
+        let chunkMeta: BufferedChunk[] = []
+
+        async function flushEmbeddingBuffer() {
+            if (chunkBuffer.length === 0) return
+
+            const embeddings = await generateBatchedEmbeddings(chunkBuffer)
+
+            const valuesStrings: string[] = []
             const params: any[] = []
 
-            for (let j = 0; j < subBatch.length; j++) {
-                const record = subBatch[j]
-                const offset = j * 6
-                values.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}::vector, $${offset + 4}, $${offset + 5}, $${offset + 6}, NOW())`)
-                params.push(record.id, record.chunk, `[${record.embedding.join(",")}]`, record.startLine, record.endLine, record.fileId)
+            for (let i = 0; i < embeddings.length; i++) {
+                const meta = chunkMeta[i]
+                const embedding = embeddings[i]
+
+                const id = nodeCrypto.randomUUID()
+                const offset = params.length
+
+                valuesStrings.push(
+                    `($${offset + 1}, $${offset + 2}, $${offset + 3}::vector, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, NOW())`
+                )
+
+                params.push(
+                    id,
+                    meta.chunk.content,
+                    `[${embedding.join(",")}]`,
+                    meta.chunk.startLine,
+                    meta.chunk.endLine,
+                    meta.fileId,
+                    meta.chunk.symbolName || null,
+                    meta.language
+                )
             }
 
             await prisma.$executeRawUnsafe(
-                `INSERT INTO code_embeddings (id, chunk, embedding, "startLine", "endLine", "fileId", "createdAt") 
-                 VALUES ${values.join(",")}`,
+                `INSERT INTO code_embeddings 
+      (id, chunk, embedding, "startLine", "endLine", "fileId", "symbolName", "language", "createdAt")
+     VALUES ${valuesStrings.join(",")}`,
                 ...params
             )
+
+            chunkBuffer = []
+            chunkMeta = []
         }
+
+        for (let i = 0; i < parsedFiles.length; i++) {
+            const file = parsedFiles[i]
+
+            const chunks = chunkCode(file.content, file.meta.symbols)
+
+            const dbFile = await prisma.repositoryFile.create({
+                data: {
+                    repositoryId,
+                    path: file.path,
+                    content: file.content,
+                    language: file.meta.language,
+                    symbols: file.meta.symbols as any,
+                    chunkCount: chunks.length
+                }
+            })
+
+            if (chunks.length === 0) continue
+
+            // per-file deduplication
+            const uniqueChunksMap = new Map<
+                string,
+                { content: string; originalIndexes: number[] }
+            >()
+
+            chunks.forEach((chunk, index) => {
+                const hash = nodeCrypto
+                    .createHash("sha256")
+                    .update(chunk.content)
+                    .digest("hex")
+
+                if (uniqueChunksMap.has(hash)) {
+                    uniqueChunksMap.get(hash)!.originalIndexes.push(index)
+                } else {
+                    uniqueChunksMap.set(hash, { content: chunk.content, originalIndexes: [index] })
+                }
+            })
+
+            const uniqueChunkEntries = Array.from(uniqueChunksMap.values())
+
+            uniqueChunkEntries.forEach(entry => {
+                entry.originalIndexes.forEach(idx => {
+                    const chunk = chunks[idx]
+
+                    chunkBuffer.push(chunk.content)
+
+                    chunkMeta.push({
+                        chunk,
+                        fileId: dbFile.id,
+                        language: file.meta.language
+                    })
+                })
+            })
+
+            if (chunkBuffer.length >= CHUNK_BATCH_TARGET) {
+                await flushEmbeddingBuffer()
+            }
+
+            if (i % 5 === 0 || i === parsedFiles.length - 1) {
+                const progress = 50 + Math.floor(((i + 1) / parsedFiles.length) * 30)
+                await updateJobProgress(jobId, "EMBEDDING", progress)
+            }
+        }
+
+        // flush remaining chunks
+        await flushEmbeddingBuffer()
+
+        // 7. Generating AI Analysis & Repository Summary
+        await updateJobProgress(jobId, "GENERATING_AI", 85)
+        await addJobLog(jobId, "Generating AI documentation and repository summary...")
+
+        const overview = await AIService.generateRepositoryOverview({
+            symbols: allSymbols,
+            dependencies: dependencies
+        })
+
+        await new Promise(resolve => setTimeout(resolve, 1000))
+
+        const architecture = await AIService.generateArchitectureAnalysis({
+            symbols: allSymbols,
+            dependencies: dependencies
+        })
+
+        // Generate Repo Summary for Vector Search
+        const primaryLanguage = repoMetadata.language || "Unknown"
+        const repoSummary = `
+Repository: ${owner}/${name}
+Primary Language: ${primaryLanguage}
+
+File Structure:
+${parsedFiles.slice(0, 50).map(f => f.path).join("\n")}${parsedFiles.length > 50 ? "\n..." : ""}
+
+Key Symbols:
+${allSymbols.slice(0, 50).map(s => `${s.type}: ${s.name}`).join("\n")}${allSymbols.length > 50 ? "\n..." : ""}
+
+Dependencies:
+${Array.from(new Set(dependencies.map(d => d.targetPath))).slice(0, 30).join("\n")}
+        `.trim()
+
+        const [summaryEmbedding] = await generateBatchedEmbeddings([repoSummary])
+
+        // 8. Finalize Repo Metadata & Summary Upsert
+        await prisma.repository.update({
+            where: { id: repositoryId },
+            data: {
+                description: repoMetadata.description || "",
+                language: primaryLanguage,
+                stars: repoMetadata.stargazers_count || 0,
+                isPrivate: repoMetadata.private || false,
+                status: "COMPLETED",
+                analyzedAt: new Date(),
+                documentation: overview,
+                architecture: architecture,
+                totalFiles: fileContents.length,
+                mainLanguage: primaryLanguage
+            }
+        })
+
+        // Save Repository Embedding (Delete old if exists, then create raw)
+        await prisma.repositoryEmbedding.deleteMany({ where: { repositoryId } })
+        
+        const embeddingId = nodeCrypto.randomUUID()
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO repository_embeddings (id, "repositoryId", summary, embedding, "createdAt") 
+             VALUES ($1, $2, $3, $4::vector, NOW())`,
+            embeddingId,
+            repositoryId,
+            repoSummary,
+            `[${summaryEmbedding.join(",")}]`
+        )
 
         // Bulk Create Dependencies
         if (dependencies.length > 0) {
