@@ -226,97 +226,124 @@ export const processRepositoryAnalysis = async (
             symbols: allSymbols,
             dependencies: dependencies
         })
+        
+        // Small delay to prevent rate limiting for generative models
+        await new Promise(resolve => setTimeout(resolve, 2000))
+
         const architecture = await AIService.generateArchitectureAnalysis({
             symbols: allSymbols,
             dependencies: dependencies
         })
 
-        // 8. Save to database in a transaction
-        await prisma.$transaction(async (tx) => {
-            await tx.repository.update({
-                where: { id: repositoryId },
-                data: {
-                    description: repoMetadata.description || "",
-                    language: repoMetadata.language || "",
-                    stars: repoMetadata.stargazers_count || 0,
-                    isPrivate: repoMetadata.private || false,
-                    status: "COMPLETED",
-                    analyzedAt: new Date(),
-                    documentation: overview,
-                    architecture: architecture,
-                    totalFiles: fileContents.length,
-                    mainLanguage: repoMetadata.language || "Unknown"
+        // 8. Prepare data for bulk insertion
+        const fileData = parsedFiles.map(f => ({
+            id: crypto.randomUUID(),
+            repositoryId,
+            path: f.path,
+            content: f.content,
+            language: f.meta.language,
+            symbols: f.meta.symbols as any,
+            chunkCount: fileChunks.find(fc => fc.path === f.path)?.chunks.length || 0
+        }))
+
+        // Collect all embeddings across all files for one large bulk insert
+        const allEmbeddingRecords: any[] = []
+        let currentEmbeddingIndex = 0
+        
+        for (const f of parsedFiles) {
+            const chunks = fileChunks.find(fc => fc.path === f.path)?.chunks || []
+            const fileId = fileData.find(fd => fd.path === f.path)?.id
+            if (!fileId) continue
+
+            if (chunks.length > 0) {
+                const batchEmbeddings = embeddings.slice(currentEmbeddingIndex, currentEmbeddingIndex + chunks.length)
+                for (let j = 0; j < chunks.length; j++) {
+                    allEmbeddingRecords.push({
+                        id: crypto.randomUUID(),
+                        chunk: chunks[j].content,
+                        embedding: batchEmbeddings[j],
+                        startLine: chunks[j].startLine,
+                        endLine: chunks[j].endLine,
+                        fileId
+                    })
                 }
-            })
+                currentEmbeddingIndex += chunks.length
+            }
+        }
 
-            // Clear old data
-            const existingFiles = await tx.repositoryFile.findMany({ where: { repositoryId }, select: { id: true } })
-            const fileIds = existingFiles.map(f => f.id)
-            await tx.codeEmbedding.deleteMany({ where: { fileId: { in: fileIds } } })
-            await tx.repositoryFile.deleteMany({ where: { repositoryId } })
-            await tx.repositoryDependency.deleteMany({ where: { repositoryId } })
+        // 9. Save to database sequentially (More resilient to poolers)
+        // Update repo metadata
+        await prisma.repository.update({
+            where: { id: repositoryId },
+            data: {
+                description: repoMetadata.description || "",
+                language: repoMetadata.language || "",
+                stars: repoMetadata.stargazers_count || 0,
+                isPrivate: repoMetadata.private || false,
+                status: "COMPLETED",
+                analyzedAt: new Date(),
+                documentation: overview,
+                architecture: architecture,
+                totalFiles: fileContents.length,
+                mainLanguage: repoMetadata.language || "Unknown"
+            }
+        })
 
-            // Create files and their embeddings
-            let currentEmbeddingIndex = 0
-            for (const f of parsedFiles) {
-                const chunks = fileChunks.find(fc => fc.path === f.path)?.chunks || []
-                
-                const createdFile = await tx.repositoryFile.create({
-                    data: {
-                        repositoryId,
-                        path: f.path,
-                        content: f.content,
-                        language: f.meta.language,
-                        symbols: f.meta.symbols as any,
-                        chunkCount: chunks.length
-                    }
-                })
+        // Clear old data fast
+        const existingFiles = await prisma.repositoryFile.findMany({ where: { repositoryId }, select: { id: true } })
+        const fileIds = existingFiles.map(f => f.id)
+        if (fileIds.length > 0) {
+            await prisma.codeEmbedding.deleteMany({ where: { fileId: { in: fileIds } } })
+            await prisma.repositoryFile.deleteMany({ where: { id: { in: fileIds } } })
+        }
+        await prisma.repositoryDependency.deleteMany({ where: { repositoryId } })
 
-                if (chunks.length > 0) {
-                    const batchEmbeddings = embeddings.slice(currentEmbeddingIndex, currentEmbeddingIndex + chunks.length)
-                    
-                    for (let i = 0; i < chunks.length; i++) {
-                        const chunk = chunks[i]
-                        const embedding = batchEmbeddings[i]
-                        
-                        await tx.$executeRawUnsafe(
-                            `INSERT INTO code_embeddings (id, chunk, embedding, "startLine", "endLine", "fileId", "createdAt") 
-                             VALUES ($1, $2, $3::vector, $4, $5, $6, NOW())`,
-                            crypto.randomUUID(),
-                            chunk.content,
-                            `[${embedding.join(",")}]`,
-                            chunk.startLine,
-                            chunk.endLine,
-                            createdFile.id
-                        )
-                    }
-                    currentEmbeddingIndex += chunks.length
-                }
+        // Bulk Create Files
+        if (fileData.length > 0) {
+            await prisma.repositoryFile.createMany({ data: fileData })
+        }
+
+        // Bulk Create Embeddings in batches of 100 to avoid query size limits
+        const EMBED_BATCH_SIZE = 100
+        for (let i = 0; i < allEmbeddingRecords.length; i += EMBED_BATCH_SIZE) {
+            const subBatch = allEmbeddingRecords.slice(i, i + EMBED_BATCH_SIZE)
+            const values: string[] = []
+            const params: any[] = []
+
+            for (let j = 0; j < subBatch.length; j++) {
+                const record = subBatch[j]
+                const offset = j * 6
+                values.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}::vector, $${offset + 4}, $${offset + 5}, $${offset + 6}, NOW())`)
+                params.push(record.id, record.chunk, `[${record.embedding.join(",")}]`, record.startLine, record.endLine, record.fileId)
             }
 
-            // Create dependencies
-            if (dependencies.length > 0) {
-                await tx.repositoryDependency.createMany({
-                    data: dependencies.map(d => ({
-                        repositoryId,
-                        sourcePath: d.sourcePath,
-                        targetPath: d.targetPath
-                    }))
-                })
-            }
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO code_embeddings (id, chunk, embedding, "startLine", "endLine", "fileId", "createdAt") 
+                 VALUES ${values.join(",")}`,
+                ...params
+            )
+        }
 
-            // Finalize Job
-            await tx.analysisJob.update({
-                where: { id: jobId },
-                data: {
-                    status: "COMPLETED",
-                    currentStep: "DONE",
-                    progress: 100,
-                    completedAt: new Date()
-                }
+        // Bulk Create Dependencies
+        if (dependencies.length > 0) {
+            await prisma.repositoryDependency.createMany({
+                data: dependencies.map(d => ({
+                    repositoryId,
+                    sourcePath: d.sourcePath,
+                    targetPath: d.targetPath
+                }))
             })
-        }, {
-            timeout: 180000 // 3 minutes for deep analysis and database transactions
+        }
+
+        // Finalize Job
+        await prisma.analysisJob.update({
+            where: { id: jobId },
+            data: {
+                status: "COMPLETED",
+                currentStep: "DONE",
+                progress: 100,
+                completedAt: new Date()
+            }
         })
 
         await addJobLog(jobId, "Analysis completed successfully.")

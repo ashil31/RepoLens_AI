@@ -22,7 +22,7 @@ export class AIService {
             .replace("{{dependencies}}", JSON.stringify(context.dependencies.slice(0, 100)))
             .replace("{{fileSummaries}}", context.fileSummaries?.join("\n") || "No file summaries provided.")
 
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
         const result = await model.generateContent(prompt)
         const response = result.response
         return response.text() || "Failed to generate overview."
@@ -36,7 +36,7 @@ export class AIService {
             .replace("{{symbols}}", JSON.stringify(context.symbols.slice(0, 150)))
             .replace("{{dependencies}}", JSON.stringify(context.dependencies.slice(0, 100)))
 
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
         const result = await model.generateContent(prompt)
         const response = result.response
         return response.text() || "Failed to generate architecture analysis."

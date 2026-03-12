@@ -1,39 +1,54 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import axios from "axios"
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "") // The SDK might require a specific version if v1beta fails
+const LOCAL_EMBEDDING_URL = "http://localhost:8001/embed"
 
 /**
- * Generates vector embeddings for a list of text chunks using Google Gemini.
+ * Generates vector embeddings for a list of text chunks using local embedding service.
  * @param chunks - List of text strings to embed
  * @returns A flat array of embeddings (number[][])
  */
 export async function generateBatchedEmbeddings(chunks: string[]): Promise<number[][]> {
-    // Filter out empty or whitespace-only chunks
-    const sanitizedChunks = chunks
-        .map(c => c.trim())
-        .filter(c => c.length > 0)
+    if (!chunks.length) return []
 
-    if (!sanitizedChunks.length) return []
+    const SUB_BATCH_SIZE = 50
+    const CONCURRENCY_LIMIT = 4
+    const totalBatches = Math.ceil(chunks.length / SUB_BATCH_SIZE)
 
-    const BATCH_SIZE = 100
-    const allEmbeddings: number[][] = []
+    console.log(`[EmbeddingService] Processing ${chunks.length} chunks in ${totalBatches} sub-batches with concurrency ${CONCURRENCY_LIMIT}...`)
 
-    try {
-        const model = genAI.getGenerativeModel({ model: "gemini-embedding-2-preview" })
-        
-        for (let i = 0; i < sanitizedChunks.length; i += BATCH_SIZE) {
-            const batch = sanitizedChunks.slice(i, i + BATCH_SIZE)
-            const result = await model.batchEmbedContents({
-                requests: batch.map((t) => ({
-                    content: { role: "user", parts: [{ text: t }] }
-                }))
-            })
-            allEmbeddings.push(...result.embeddings.map((e) => e.values))
-        }
+    const results: number[][] = new Array(chunks.length)
+    const batches: string[][] = []
 
-        return allEmbeddings
-    } catch (error) {
-        console.error("Error generating Gemini embeddings:", error)
-        throw error
+    for (let i = 0; i < chunks.length; i += SUB_BATCH_SIZE) {
+        batches.push(chunks.slice(i, i + SUB_BATCH_SIZE))
     }
+
+    // Process in parallel with limit
+    for (let i = 0; i < batches.length; i += CONCURRENCY_LIMIT) {
+        const currentBatchSet = batches.slice(i, i + CONCURRENCY_LIMIT)
+
+        await Promise.all(currentBatchSet.map(async (batch, index) => {
+            const batchIndex = i + index
+            const startIndex = batchIndex * SUB_BATCH_SIZE
+
+            try {
+                const response = await axios.post(LOCAL_EMBEDDING_URL, {
+                    text: batch
+                }, {
+                    timeout: 600000 // 1 minute per sub-batch
+                })
+
+                const batchEmbeddings = response.data.embedding
+                for (let j = 0; j < batchEmbeddings.length; j++) {
+                    results[startIndex + j] = batchEmbeddings[j]
+                }
+            } catch (error: any) {
+                console.error(`[EmbeddingService] Batch ${batchIndex} failed:`, error.message)
+                throw error
+            }
+        }))
+    }
+
+    console.log(`[EmbeddingService] Successfully generated ${results.length} embeddings across all batches.`)
+    return results
 }
