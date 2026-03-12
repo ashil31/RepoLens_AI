@@ -10,6 +10,11 @@ import * as githubApi from "./github.service"
 import * as githubRepository from "../repositories/github.repository"
 import { prisma } from "../database/prisma"
 import { JobStep } from "@prisma/client"
+import { parseCodeFile } from "./parser.service"
+import { filterFiles } from "../utils/fileFilter"
+import { chunkCode } from "./chunking.service"
+import { generateBatchedEmbeddings } from "./embedding.service"
+import { AIService } from "./ai.service"
 
 // Default Octokit (no auth – public repos only)
 const getDefaultOctokit = () => new Octokit({})
@@ -73,6 +78,13 @@ export const fetchRepositoryFiles = async (
         recursive: "true"
     })
 
+    // Apply file filtering
+    const allPaths = treeData.tree
+        .filter(node => node.type === "blob" && node.path)
+        .map(node => node.path as string)
+    
+    const filteredPaths = filterFiles(allPaths)
+
     const binaryExtensions = [
         ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
         ".mp4", ".mp3", ".wav", ".ogg",
@@ -80,14 +92,16 @@ export const fetchRepositoryFiles = async (
         ".exe", ".dll", ".so",
         ".pdf", ".ico"
     ]
+    
     const codeFiles = treeData.tree.filter((node) => {
         if (node.type !== "blob" || !node.path) return false
+        if (!filteredPaths.includes(node.path)) return false
         const ext = node.path.split(".").pop()?.toLowerCase()
         if (!ext) return false
         return !binaryExtensions.includes("." + ext)
     })
 
-    const MAX_FILES = 200
+    const MAX_FILES = 500 // Increased for better analysis
     const filesToFetch = codeFiles.slice(0, MAX_FILES)
 
     const fileContents = await Promise.all(
@@ -150,33 +164,74 @@ export const processRepositoryAnalysis = async (
 
     try {
         // 1. Fetch Metadata
-        await updateJobProgress(jobId, "FETCHING_REPO", 10)
+        await updateJobProgress(jobId, "FETCHING_REPO", 5)
         await addJobLog(jobId, "Fetching repository metadata...")
         const repoMetadata = await fetchRepositoryMetadata(owner, name, octokit)
         await addJobLog(jobId, `Successfully fetched metadata for ${owner}/${name}`)
 
         // 2. Fetch Files
-        await updateJobProgress(jobId, "DOWNLOADING_FILES", 30)
+        await updateJobProgress(jobId, "DOWNLOADING_FILES", 15)
         await addJobLog(jobId, "Downloading repository files...")
         const fileContents = await fetchRepositoryFiles(owner, name, repoMetadata.default_branch, octokit, accessToken)
         await addJobLog(jobId, `Downloaded ${fileContents.length} files`)
 
-        // 3. Parsing Code
-        await updateJobProgress(jobId, "PARSING_CODE", 50)
-        await addJobLog(jobId, "Parsing code into AST...")
-        // Here we would call parserService.parseCodeFile for each file
+        // 3. Parsing Code & Symbol Extraction
+        await updateJobProgress(jobId, "PARSING_CODE", 25)
+        await addJobLog(jobId, "Parsing code and extracting symbols...")
+        const parsedFiles = fileContents.map(file => ({
+            ...file,
+            meta: parseCodeFile(file.path, file.content)
+        }))
+        const allSymbols = parsedFiles.flatMap(f => f.meta.symbols.map(s => ({ ...s, filePath: f.path })))
+        await addJobLog(jobId, `Extracted ${allSymbols.length} symbols from ${parsedFiles.length} files`)
 
         // 4. Building Graph
-        await updateJobProgress(jobId, "BUILDING_GRAPH", 70)
+        await updateJobProgress(jobId, "BUILDING_GRAPH", 35)
         await addJobLog(jobId, "Building dependency graph...")
-        // Building dependency graph...
+        
+        const dependencies: { sourcePath: string; targetPath: string }[] = []
+        parsedFiles.forEach(file => {
+            file.meta.imports.forEach(imp => {
+                if (imp.startsWith(".")) {
+                    dependencies.push({
+                        sourcePath: file.path,
+                        targetPath: imp
+                    })
+                }
+            })
+        })
 
-        // 5. Generating AI Analysis
-        await updateJobProgress(jobId, "GENERATING_AI", 90)
+        // 5. Semantic Chunking
+        await updateJobProgress(jobId, "PARSING_CODE", 45)
+        await addJobLog(jobId, "Splitting code into semantic chunks...")
+        const fileChunks = parsedFiles.map(file => ({
+            path: file.path,
+            chunks: chunkCode(file.content, file.meta.symbols)
+        }))
+        const totalChunksCount = fileChunks.reduce((acc, f) => acc + f.chunks.length, 0)
+        await addJobLog(jobId, `Created ${totalChunksCount} semantic chunks`)
+
+        // 6. Embedding Generation
+        await updateJobProgress(jobId, "EMBEDDING", 60)
+        await addJobLog(jobId, "Generating vector embeddings (batched)...")
+        const allChunksTexts = fileChunks.flatMap(f => f.chunks.map(c => c.content))
+        const embeddings = await generateBatchedEmbeddings(allChunksTexts)
+        await addJobLog(jobId, `Successfully generated ${embeddings.length} embeddings`)
+
+        // 7. Generating AI Analysis
+        await updateJobProgress(jobId, "GENERATING_AI", 80)
         await addJobLog(jobId, "Generating AI documentation and architecture summary...")
-        // AI analysis...
+        
+        const overview = await AIService.generateRepositoryOverview({
+            symbols: allSymbols,
+            dependencies: dependencies
+        })
+        const architecture = await AIService.generateArchitectureAnalysis({
+            symbols: allSymbols,
+            dependencies: dependencies
+        })
 
-        // 6. Save to database in a transaction
+        // 8. Save to database in a transaction
         await prisma.$transaction(async (tx) => {
             await tx.repository.update({
                 where: { id: repositoryId },
@@ -187,22 +242,65 @@ export const processRepositoryAnalysis = async (
                     isPrivate: repoMetadata.private || false,
                     status: "COMPLETED",
                     analyzedAt: new Date(),
-                    documentation: "AI-generated documentation placeholder",
-                    architecture: "AI-generated architecture placeholder",
+                    documentation: overview,
+                    architecture: architecture,
                     totalFiles: fileContents.length,
                     mainLanguage: repoMetadata.language || "Unknown"
                 }
             })
 
+            // Clear old data
+            const existingFiles = await tx.repositoryFile.findMany({ where: { repositoryId }, select: { id: true } })
+            const fileIds = existingFiles.map(f => f.id)
+            await tx.codeEmbedding.deleteMany({ where: { fileId: { in: fileIds } } })
             await tx.repositoryFile.deleteMany({ where: { repositoryId } })
+            await tx.repositoryDependency.deleteMany({ where: { repositoryId } })
 
-            if (fileContents.length > 0) {
-                await tx.repositoryFile.createMany({
-                    data: fileContents.map(f => ({
+            // Create files and their embeddings
+            let currentEmbeddingIndex = 0
+            for (const f of parsedFiles) {
+                const chunks = fileChunks.find(fc => fc.path === f.path)?.chunks || []
+                
+                const createdFile = await tx.repositoryFile.create({
+                    data: {
                         repositoryId,
                         path: f.path,
                         content: f.content,
-                        language: f.path.split(".").pop() || ""
+                        language: f.meta.language,
+                        symbols: f.meta.symbols as any,
+                        chunkCount: chunks.length
+                    }
+                })
+
+                if (chunks.length > 0) {
+                    const batchEmbeddings = embeddings.slice(currentEmbeddingIndex, currentEmbeddingIndex + chunks.length)
+                    
+                    for (let i = 0; i < chunks.length; i++) {
+                        const chunk = chunks[i]
+                        const embedding = batchEmbeddings[i]
+                        
+                        await tx.$executeRawUnsafe(
+                            `INSERT INTO code_embeddings (id, chunk, embedding, "startLine", "endLine", "fileId", "createdAt") 
+                             VALUES ($1, $2, $3::vector, $4, $5, $6, NOW())`,
+                            crypto.randomUUID(),
+                            chunk.content,
+                            `[${embedding.join(",")}]`,
+                            chunk.startLine,
+                            chunk.endLine,
+                            createdFile.id
+                        )
+                    }
+                    currentEmbeddingIndex += chunks.length
+                }
+            }
+
+            // Create dependencies
+            if (dependencies.length > 0) {
+                await tx.repositoryDependency.createMany({
+                    data: dependencies.map(d => ({
+                        repositoryId,
+                        sourcePath: d.sourcePath,
+                        targetPath: d.targetPath
                     }))
                 })
             }
@@ -218,7 +316,7 @@ export const processRepositoryAnalysis = async (
                 }
             })
         }, {
-            timeout: 30000 // 30 seconds
+            timeout: 180000 // 3 minutes for deep analysis and database transactions
         })
 
         await addJobLog(jobId, "Analysis completed successfully.")
