@@ -70,11 +70,6 @@ export default function LoginPage() {
             autoComplete="current-password"
           />
         </div>
-        {error && (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        )}
         <Button type="submit" disabled={loading} variant="default" size="cta" className="w-full">
           {loading ? "Signing in…" : "Log in"}
         </Button>

@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import { toast } from "@/lib/toast";
 import * as repositoryService from "@/services/repository.service";
 import type { Repository } from "@/types/user";
 import { useAppStore } from "@/store";
@@ -20,7 +21,12 @@ function mapRepo(r: repositoryService.RepositoryResponse["data"]): Repository {
     repoUrl: r.repoUrl,
     analyzedAt: r.analyzedAt,
     workspaceId: r.workspaceId,
+    status: r.status,
+    activeJob: r.activeJob ?? null,
     files: r.files,
+    documentation: r.documentation ?? null,
+    architecture: r.architecture ?? null,
+    dependencies: r.dependencies ?? [],
   };
 }
 
@@ -53,6 +59,30 @@ export function useRepository(workspaceId: string | null, repoId: string | null)
   });
 }
 
+export function useRepositoryFileContent(
+  workspaceId: string | null,
+  repoId: string | null,
+  fileId: string | null
+) {
+  return useQuery({
+    queryKey: queryKeys.repositoryFileContent(
+      workspaceId ?? "",
+      repoId ?? "",
+      fileId ?? ""
+    ),
+    queryFn: async () => {
+      const res = await repositoryService.getRepositoryFileContent(
+        workspaceId!,
+        repoId!,
+        fileId!
+      );
+      return res.data;
+    },
+    enabled: !!workspaceId && !!repoId && !!fileId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useAddRepository(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -76,8 +106,13 @@ export function useDeleteRepository(workspaceId: string) {
   return useMutation({
     mutationFn: (repoId: string) =>
       repositoryService.deleteRepository(workspaceId, repoId),
-    onSuccess: () => {
+    onSuccess: (_, repoId) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repositories(workspaceId) });
+      queryClient.removeQueries({ queryKey: queryKeys.repository(workspaceId, repoId) });
+      toast.success("Repository removed", "The repository has been disconnected from this workspace.");
+    },
+    onError: (err: Error) => {
+      toast.error("Failed to remove repository", err.message);
     },
   });
 }

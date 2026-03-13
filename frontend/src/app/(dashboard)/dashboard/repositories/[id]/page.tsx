@@ -10,10 +10,38 @@ import {
   RepoResizableLayout,
   type ChatMessage,
 } from "@/components/repository";
+import { AnalysisStepLoader } from "@/components/ui/multi-step-loader";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store";
-import { useRepository } from "@/hooks/queries";
+import { useRepository, useAnalysisJob } from "@/hooks/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import type { Repository } from "@/types/user";
+
+const ANALYSIS_STEPS = [
+  { text: "Fetching repository metadata" },
+  { text: "Downloading files" },
+  { text: "Parsing code and extracting symbols" },
+  { text: "Building dependency graph" },
+  { text: "Processing embeddings" },
+  { text: "Generating AI documentation" },
+  { text: "Analysis complete" },
+] as const;
+
+const STEP_ORDER: (string | null)[] = [
+  "FETCHING_REPO",
+  "DOWNLOADING_FILES",
+  "PARSING_CODE",
+  "BUILDING_GRAPH",
+  "EMBEDDING",
+  "GENERATING_AI",
+  "DONE",
+];
+
+function stepToIndex(step: string | null): number {
+  const i = STEP_ORDER.indexOf(step);
+  return i >= 0 ? i : 0;
+}
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -50,7 +78,28 @@ function buildPlaceholderDoc(repo: Repository): string {
 export default function RepoPage({ params }: PageProps) {
   const { id: repoId } = use(params);
   const selectedWorkspaceId = useAppStore((s) => s.selectedWorkspaceId);
-  const { data: repo, isLoading, isError } = useRepository(selectedWorkspaceId, repoId);
+  const queryClient = useQueryClient();
+  const { data: repo, isLoading, isError, refetch: refetchRepo } = useRepository(selectedWorkspaceId, repoId);
+
+  const jobId = repo?.activeJob?.id ?? null;
+  const { data: jobData } = useAnalysisJob(jobId);
+
+  const isRepoBeingAnalyzed =
+    repo?.status === "PENDING" ||
+    repo?.status === "CLONING" ||
+    repo?.status === "ANALYZING";
+  const hasActiveJob = !!repo?.activeJob;
+  const jobStatus = jobData?.data?.status;
+  const jobStep = jobData?.data?.currentStep ?? repo?.activeJob?.currentStep ?? null;
+
+  useEffect(() => {
+    if (jobStatus === "COMPLETED" && selectedWorkspaceId) {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.repository(selectedWorkspaceId, repoId),
+      });
+      refetchRepo();
+    }
+  }, [jobStatus, selectedWorkspaceId, repoId, queryClient, refetchRepo]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversations, setConversations] = useState<{ id: string; title: string; messages: ChatMessage[] }[]>([]);
@@ -118,6 +167,48 @@ export default function RepoPage({ params }: PageProps) {
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex flex-1 items-center justify-center p-8">
           <div className="h-32 w-full max-w-md animate-pulse rounded-xl bg-muted" />
+        </div>
+      </div>
+    );
+  }
+
+  const repoName = repo.fullName ?? (repo.owner && repo.name ? `${repo.owner}/${repo.name}` : repo.name);
+  const showAnalysisLoader = isRepoBeingAnalyzed && hasActiveJob && jobStatus !== "COMPLETED" && jobStatus !== "FAILED";
+
+  if (showAnalysisLoader) {
+    const stepIndex = stepToIndex(jobStep);
+    return (
+      <div className="flex h-full min-h-0 w-full max-w-full flex-col gap-2 overflow-x-hidden overflow-y-hidden p-2 sm:gap-4 sm:p-4">
+        <header className="shrink-0">
+          <RepoHeader
+            repo={repo}
+            backHref="/dashboard/repositories"
+            onShare={() => setShareOpen(true)}
+            onExport={() => {}}
+            status="analyzing"
+          />
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <AnalysisStepLoader
+            loadingStates={[...ANALYSIS_STEPS]}
+            currentStepIndex={stepIndex}
+            loading={true}
+            repoName={repoName}
+            inline
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (jobStatus === "FAILED") {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="dashboard-content-scroll min-h-0 flex-1 overflow-y-auto p-4">
+          <p className="text-muted-foreground">Analysis failed for this repository.</p>
+          <Link href="/dashboard/repositories">
+            <Button variant="outline" className="mt-4 cursor-pointer">Back to repositories</Button>
+          </Link>
         </div>
       </div>
     );
@@ -248,9 +339,14 @@ export default function RepoPage({ params }: PageProps) {
             <div className="h-full min-h-0 min-w-0 overflow-hidden">
               <RepoPreviewPanel
                 docContent={docContent}
+                documentation={repo.documentation}
+                architecture={repo.architecture}
                 files={files}
+                dependencies={repo.dependencies ?? []}
                 selectedFilePath={selectedFilePath}
                 onSelectFile={setSelectedFilePath}
+                workspaceId={selectedWorkspaceId}
+                repoId={repoId}
                 mode={previewMode}
                 onModeChange={setPreviewMode}
               />
@@ -280,9 +376,14 @@ export default function RepoPage({ params }: PageProps) {
             <div className="h-full min-h-0 min-w-0 overflow-hidden">
               <RepoPreviewPanel
                 docContent={docContent}
+                documentation={repo.documentation}
+                architecture={repo.architecture}
                 files={files}
+                dependencies={repo.dependencies ?? []}
                 selectedFilePath={selectedFilePath}
                 onSelectFile={setSelectedFilePath}
+                workspaceId={selectedWorkspaceId}
+                repoId={repoId}
                 mode={previewMode}
                 onModeChange={setPreviewMode}
               />

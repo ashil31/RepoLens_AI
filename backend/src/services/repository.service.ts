@@ -13,6 +13,7 @@ import { prisma } from "../database/prisma"
 import { JobStep } from "@prisma/client"
 import { parseCodeFile } from "./parser.service"
 import { filterFiles } from "../utils/fileFilter"
+import { resolveImport } from "../utils/importResolver"
 import { chunkCode } from "./chunking.service"
 import { generateBatchedEmbeddings } from "./embedding.service"
 import { AIService } from "./ai.service"
@@ -131,7 +132,7 @@ export async function addJobLog(jobId: string, message: string) {
         where: { id: jobId },
         select: { logs: true }
     })
-    const existingLogs = Array.isArray(job?.logs) ? (job.logs as string[]) : []
+    const existingLogs = Array.isArray(job?.logs) ? (job!.logs as string[]) : []
     const newLogs = [...existingLogs, `[${new Date().toISOString()}] ${message}`]
 
     await prisma.analysisJob.update({
@@ -215,17 +216,25 @@ export const processRepositoryAnalysis = async (
         await updateJobProgress(jobId, "BUILDING_GRAPH", 35)
         await addJobLog(jobId, "Building dependency graph...")
 
+        const allFilePaths = new Set(parsedFiles.map((f) => f.path))
         const dependencies: { sourcePath: string; targetPath: string }[] = []
+        const seenEdges = new Set<string>()
+
         parsedFiles.forEach(file => {
             file.meta.imports.forEach(imp => {
-                if (imp.startsWith(".")) {
-                    dependencies.push({
-                        sourcePath: file.path,
-                        targetPath: imp
-                    })
-                }
+                const resolved = resolveImport(file.path, imp.trim(), allFilePaths)
+                if (!resolved || resolved === file.path) return
+                const key = `${file.path}->${resolved}`
+                if (seenEdges.has(key)) return
+                seenEdges.add(key)
+                dependencies.push({
+                    sourcePath: file.path,
+                    targetPath: resolved
+                })
             })
         })
+
+        await addJobLog(jobId, `Resolved ${dependencies.length} file dependencies`)
 
         // 5. Clear old data (before streaming new data)
         await addJobLog(jobId, "Clearing old repository data...")
@@ -524,12 +533,49 @@ export const getWorkspaceRepositories = async (workspaceId: string) => {
 export const getRepositoryDetails = async (workspaceId: string, repoId: string) => {
     const repo = await prisma.repository.findUnique({
         where: { id: repoId },
-        include: { files: { select: { id: true, path: true, language: true } } }
+        include: {
+            files: { select: { id: true, path: true, language: true } },
+            dependencies: { select: { sourcePath: true, targetPath: true } },
+            analysisJobs: {
+                where: { status: { in: ["PENDING", "PROCESSING"] } },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: { id: true, currentStep: true, progress: true, status: true }
+            }
+        }
     })
     if (!repo || repo.workspaceId !== workspaceId) {
         throw new AppError("Repository not found", HTTPSTATUS.NOT_FOUND, "REPO_NOT_FOUND")
     }
-    return repo
+    const activeJob = (repo.analysisJobs && repo.analysisJobs.length > 0) ? repo.analysisJobs[0] : null
+    const { analysisJobs, ...rest } = repo
+    return { ...rest, activeJob } as typeof rest & { activeJob: typeof activeJob }
+}
+
+export const getRepositoryFileContent = async (
+    workspaceId: string,
+    repoId: string,
+    fileId: string
+): Promise<{ content: string; path: string; language: string | null }> => {
+    const repo = await prisma.repository.findUnique({
+        where: { id: repoId },
+        select: { workspaceId: true },
+    })
+    if (!repo || repo.workspaceId !== workspaceId) {
+        throw new AppError("Repository not found", HTTPSTATUS.NOT_FOUND, "REPO_NOT_FOUND")
+    }
+    const file = await prisma.repositoryFile.findFirst({
+        where: { id: fileId, repositoryId: repoId },
+        select: { content: true, path: true, language: true },
+    })
+    if (!file) {
+        throw new AppError("File not found", HTTPSTATUS.NOT_FOUND, "FILE_NOT_FOUND")
+    }
+    return {
+        content: file.content ?? "",
+        path: file.path,
+        language: file.language,
+    }
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────

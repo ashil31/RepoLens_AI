@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -10,12 +10,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAppStore } from "@/store";
-import { useRepositories } from "@/hooks/queries";
+import { useRepositories, useDeleteRepository } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
 import type { Repository } from "@/types/user";
 import {
@@ -23,12 +30,13 @@ import {
   GitBranch,
   LayoutGrid,
   List,
-  SlidersHorizontal,
-  ChevronDown,
   Github,
   MoreHorizontal,
   AlertCircle,
   CheckCircle2,
+  ExternalLink,
+  Trash2,
+  FolderOpen,
 } from "lucide-react";
 
 const TABS: TabItem[] = [
@@ -49,18 +57,149 @@ function RepoStatusIcon({ repo }: { repo: Repository }) {
   );
 }
 
+function RepoActionsDropdown({
+  repo,
+  onDeletingChange,
+}: {
+  repo: Repository;
+  onDeletingChange?: (deleting: boolean) => void;
+}) {
+  const router = useRouter();
+  const workspaceId = useAppStore((s) => s.selectedWorkspaceId);
+  const deleteRepo = useDeleteRepository(workspaceId ?? "");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const href = `/dashboard/repositories/${repo.id}`;
+  const repoLabel = repo.name ?? repo.fullName ?? "this repository";
+
+  const isDeleting = deleteDialogOpen || deleteRepo.isPending;
+  useEffect(() => {
+    onDeletingChange?.(isDeleting);
+    return () => onDeletingChange?.(false);
+  }, [isDeleting, onDeletingChange]);
+
+  const handleView = () => {
+    router.push(href);
+  };
+
+  const handleDeleteClick = (e: Event) => {
+    e.preventDefault();
+    if (!workspaceId) return;
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    deleteRepo.mutate(repo.id, {
+      onSuccess: () => setDeleteDialogOpen(false),
+    });
+  };
+
+  return (
+    <>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 cursor-pointer"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          aria-label="More options"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="w-52"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <DropdownMenuItem onSelect={handleView} className="cursor-pointer gap-2">
+          <FolderOpen className="h-4 w-4 shrink-0" />
+          View
+        </DropdownMenuItem>
+        {repo.repoUrl && (
+          <DropdownMenuItem asChild>
+            <a
+              href={repo.repoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex cursor-pointer items-center gap-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="h-4 w-4 shrink-0" />
+              View on GitHub
+            </a>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={handleDeleteClick}
+          className="cursor-pointer gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
+          disabled={deleteRepo.isPending}
+        >
+          <Trash2 className="h-4 w-4 shrink-0" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+
+    <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <DialogContent title="Remove repository" className="sm:max-w-md p-0 gap-0 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4 px-6 pt-6">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <Trash2 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1 space-y-1">
+            <DialogTitle className="text-base font-semibold leading-tight">
+              Remove repository
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Remove &quot;<span className="font-medium text-foreground">{repoLabel}</span>&quot; from this workspace? This will disconnect it from RepoLens but not delete it from GitHub.
+            </p>
+          </div>
+        </div>
+        <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-6 pb-6">
+          <Button
+            variant="outline"
+            onClick={() => setDeleteDialogOpen(false)}
+            className="cursor-pointer sm:min-w-[72px]"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDeleteConfirm}
+            disabled={deleteRepo.isPending}
+            className="cursor-pointer sm:min-w-[72px]"
+          >
+            {deleteRepo.isPending ? "Removing…" : "Remove"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
+  );
+}
+
 function RepoCardGrid({ repo }: { repo: Repository }) {
   const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
   const displayUrl = repo.fullName ?? repo.repoUrl ?? "—";
   const href = `/dashboard/repositories/${repo.id}`;
   return (
     <div
       role="link"
       tabIndex={0}
-      onClick={() => router.push(href)}
+      onClick={() => {
+        if (isDeleting) return;
+        router.push(href);
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
+          if (isDeleting) return;
           router.push(href);
         }
       }}
@@ -80,40 +219,7 @@ function RepoCardGrid({ repo }: { repo: Repository }) {
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <RepoStatusIcon repo={repo} />
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 cursor-pointer"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                aria-label="More options"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-48 p-2">
-              <Link
-                href={`/dashboard/repositories/${repo.id}`}
-                className="block rounded-md px-3 py-2 text-sm hover:bg-accent"
-              >
-                Open repository
-              </Link>
-              {repo.repoUrl && (
-                <a
-                  href={repo.repoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-md px-3 py-2 text-sm hover:bg-accent"
-                >
-                  View on GitHub
-                </a>
-              )}
-            </PopoverContent>
-          </Popover>
+          <RepoActionsDropdown repo={repo} onDeletingChange={setIsDeleting} />
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -154,16 +260,21 @@ function RepoCardGrid({ repo }: { repo: Repository }) {
 
 function RepoRowList({ repo }: { repo: Repository }) {
   const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
   const displayUrl = repo.fullName ?? repo.repoUrl ?? "—";
   const href = `/dashboard/repositories/${repo.id}`;
   return (
     <div
       role="link"
       tabIndex={0}
-      onClick={() => router.push(href)}
+      onClick={() => {
+        if (isDeleting) return;
+        router.push(href);
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
+          if (isDeleting) return;
           router.push(href);
         }
       }}
@@ -203,40 +314,7 @@ function RepoRowList({ repo }: { repo: Repository }) {
           </span>
         )}
         <RepoStatusIcon repo={repo} />
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 cursor-pointer"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              aria-label="More options"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-48 p-2">
-            <Link
-              href={`/dashboard/repositories/${repo.id}`}
-              className="block rounded-md px-3 py-2 text-sm hover:bg-accent"
-            >
-              Open repository
-            </Link>
-            {repo.repoUrl && (
-              <a
-                href={repo.repoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block rounded-md px-3 py-2 text-sm hover:bg-accent"
-              >
-                View on GitHub
-              </a>
-            )}
-          </PopoverContent>
-        </Popover>
+        <RepoActionsDropdown repo={repo} onDeletingChange={setIsDeleting} />
       </div>
     </div>
   );
@@ -345,7 +423,7 @@ export default function ConnectedRepositoriesPage() {
                   />
                 </div>
                 <div className="flex shrink-0 items-center gap-1 self-start rounded-lg border border-border bg-muted/30 p-1 sm:self-center">
-                  <Button
+                  {/* <Button
                     variant="ghost"
                     size="sm"
                     className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground cursor-pointer sm:px-2.5"
@@ -353,7 +431,7 @@ export default function ConnectedRepositoriesPage() {
                   >
                     <SlidersHorizontal className="h-4 w-4 shrink-0" />
                     <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                  </Button>
+                  </Button> */}
                   <div className="h-4 w-px shrink-0 bg-border" />
                   <Button
                     variant={viewMode === "grid" ? "secondary" : "ghost"}
@@ -400,7 +478,7 @@ export default function ConnectedRepositoriesPage() {
                   </button>
                 </div>
               ) : viewMode === "grid" ? (
-                <div className="mt-4 grid grid-cols-1 gap-4 min-w-0 sm:mt-6 sm:grid-cols-2">
+                <div className="mt-4 grid grid-cols-1 gap-4 min-w-0 sm:mt-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {(filteredRepos ?? []).map((repo) => (
                     <RepoCardGrid key={repo.id} repo={repo} />
                   ))}

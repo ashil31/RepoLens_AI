@@ -8,6 +8,7 @@ export {
   useAddMember,
   useRepositories,
   useRepository,
+  useRepositoryFileContent,
   useAddRepository,
   useDeleteRepository,
   useProfile,

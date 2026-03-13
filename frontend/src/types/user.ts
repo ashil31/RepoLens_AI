@@ -27,6 +27,35 @@ export interface Workspace {
   updatedAt?: string;
 }
 
+export type RepoStatus = "PENDING" | "CLONING" | "ANALYZING" | "COMPLETED" | "FAILED";
+
+export type JobStep =
+  | "FETCHING_REPO"
+  | "DOWNLOADING_FILES"
+  | "PARSING_CODE"
+  | "BUILDING_GRAPH"
+  | "EMBEDDING"
+  | "GENERATING_AI"
+  | "DONE";
+
+export interface ActiveAnalysisJob {
+  id: string;
+  currentStep: JobStep | null;
+  progress: number;
+  status: string;
+}
+
+export interface RepositoryFile {
+  id: string;
+  path: string;
+  language: string | null;
+}
+
+export interface RepositoryDependency {
+  sourcePath: string;
+  targetPath: string;
+}
+
 export interface Repository {
   id: string;
   name: string;
@@ -40,7 +69,12 @@ export interface Repository {
   repoUrl?: string | null;
   analyzedAt?: string;
   workspaceId?: string;
-  files?: { id: string; path: string; language: string | null }[];
+  status?: RepoStatus;
+  activeJob?: ActiveAnalysisJob | null;
+  files?: RepositoryFile[];
+  documentation?: string | null;
+  architecture?: string | null;
+  dependencies?: RepositoryDependency[];
 }
 
 /** Profile for Settings page (from API). */

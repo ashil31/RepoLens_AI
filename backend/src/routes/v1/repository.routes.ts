@@ -4,6 +4,7 @@ import {
     addRepositoryHandler,
     getWorkspaceRepositoriesHandler,
     getRepositoryDetailsHandler,
+    getRepositoryFileContentHandler,
     deleteRepositoryHandler,
     installGitHubHandler,
     getGitHubRepositoriesHandler,
@@ -24,6 +25,7 @@ router.delete("/github/installation", disconnectGitHubHandler)
 // Repositories (workspace repos)
 router.post("/add", addRepositoryHandler)
 router.get("/", getWorkspaceRepositoriesHandler)
+router.get("/:repoId/files/:fileId", getRepositoryFileContentHandler)
 router.get("/:repoId", getRepositoryDetailsHandler)
 router.delete("/:repoId", deleteRepositoryHandler)
 

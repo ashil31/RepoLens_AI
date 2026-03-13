@@ -9,9 +9,11 @@ export {
   useAddMember,
 } from "./use-workspaces";
 export type { Workspace } from "./use-workspaces";
+export { useAnalysisJob } from "./use-analysis-job";
 export {
   useRepositories,
   useRepository,
+  useRepositoryFileContent,
   useAddRepository,
   useDeleteRepository,
   useGitHubInstallationStatus,

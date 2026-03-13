@@ -7,6 +7,7 @@ import {
     fetchAndSaveRepository,
     getWorkspaceRepositories,
     getRepositoryDetails,
+    getRepositoryFileContent,
     removeRepository,
     parseRepoFullName,
     connectGitHub,
@@ -151,6 +152,16 @@ export const getRepositoryDetailsHandler = catchAsync(async (req: Request, res: 
     await verifyWorkspaceAccess(workspaceId, userId)
     const repo = await getRepositoryDetails(workspaceId, repoId)
     res.status(HTTPSTATUS.OK).json({ data: repo })
+})
+
+export const getRepositoryFileContentHandler = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user!.id as string
+    const workspaceId = req.params.workspaceId as string
+    const repoId = req.params.repoId as string
+    const fileId = req.params.fileId as string
+    await verifyWorkspaceAccess(workspaceId, userId)
+    const file = await getRepositoryFileContent(workspaceId, repoId, fileId)
+    res.status(HTTPSTATUS.OK).json({ data: file })
 })
 
 export const deleteRepositoryHandler = catchAsync(async (req: Request, res: Response) => {

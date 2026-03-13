@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { FileCode, Copy, Check, ChevronRight, ChevronDown, Folder, FolderOpen } from "lucide-react";
+import { FileCode, Copy, Check, ChevronRight, ChevronDown, Folder, FolderOpen, Loader2 } from "lucide-react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
+import { useRepositoryFileContent } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
 
 type FileItem = { id: string; path: string; language?: string | null };
@@ -11,6 +14,8 @@ type RepoFilePreviewProps = {
   files: FileItem[];
   selectedPath: string | null;
   onSelectFile: (path: string) => void;
+  workspaceId?: string | null;
+  repoId?: string | null;
   fileContent?: string | null;
   className?: string;
 };
@@ -127,16 +132,51 @@ function FileTree({
   );
 }
 
+function getPrismLanguage(lang: string | null): string {
+  const m: Record<string, string> = {
+    ts: "typescript",
+    tsx: "tsx",
+    js: "javascript",
+    jsx: "jsx",
+    json: "json",
+    css: "css",
+    scss: "scss",
+    html: "html",
+    md: "markdown",
+    mdx: "mdx",
+    py: "python",
+    go: "go",
+    rs: "rust",
+    java: "java",
+    rb: "ruby",
+  };
+  return m[(lang ?? "").toLowerCase()] ?? lang ?? "text";
+}
+
 export function RepoFilePreview({
   files,
   selectedPath,
   onSelectFile,
-  fileContent = null,
+  workspaceId,
+  repoId,
+  fileContent: propFileContent,
   className,
 }: RepoFilePreviewProps) {
+  const selectedFile = useMemo(
+    () => files.find((f) => f.path === selectedPath),
+    [files, selectedPath]
+  );
+  const { data: fetchedContent, isLoading } = useRepositoryFileContent(
+    workspaceId ?? null,
+    repoId ?? null,
+    selectedFile?.id ?? null
+  );
+
   const displayContent =
-    fileContent ?? (selectedPath ? `// ${selectedPath}\n// File preview will load here.` : null);
+    propFileContent ??
+    (fetchedContent?.content ?? (selectedPath ? `// ${selectedPath}\n// Select a file to preview.` : null));
   const hasContent = !!displayContent;
+  const language = fetchedContent?.language ?? selectedFile?.language ?? null;
 
   const fileList = useMemo(() => {
     const seen = new Set<string>();
@@ -172,14 +212,42 @@ export function RepoFilePreview({
           <>
             <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
               <span className="truncate font-mono text-xs text-foreground">
-                <FileCode className="mr-2 inline h-3.5 w-3.5 text-muted-foreground" />
+                {isLoading ? (
+                  <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                ) : (
+                  <FileCode className="mr-2 inline h-3.5 w-3.5 text-muted-foreground" />
+                )}
                 {selectedPath}
               </span>
               {hasContent && <CopyButton text={displayContent} />}
             </div>
-            <pre className="min-h-0 flex-1 overflow-auto whitespace-pre p-4 font-mono text-xs text-foreground dashboard-content-scroll">
-              {displayContent}
-            </pre>
+            <div className="min-h-0 flex-1 overflow-auto dashboard-content-scroll">
+              {isLoading ? (
+                <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+                  Loading file…
+                </div>
+              ) : fetchedContent && displayContent ? (
+                <SyntaxHighlighter
+                  language={getPrismLanguage(language)}
+                  style={oneDark}
+                  customStyle={{
+                    margin: 0,
+                    padding: "1rem",
+                    fontSize: "0.75rem",
+                    background: "hsl(var(--muted))",
+                    borderRadius: 0,
+                  }}
+                  codeTagProps={{ style: { fontFamily: "inherit" } }}
+                  showLineNumbers
+                >
+                  {displayContent}
+                </SyntaxHighlighter>
+              ) : (
+                <pre className="whitespace-pre p-4 font-mono text-xs text-foreground">
+                  {displayContent}
+                </pre>
+              )}
+            </div>
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">

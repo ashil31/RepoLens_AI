@@ -26,6 +26,20 @@ export async function getRepositoryDetails(workspaceId: string, repoId: string):
   return api.get<RepositoryResponse>(`/workspaces/${workspaceId}/repos/${repoId}`);
 }
 
+export interface RepositoryFileContentResponse {
+  data: { content: string; path: string; language: string | null };
+}
+
+export async function getRepositoryFileContent(
+  workspaceId: string,
+  repoId: string,
+  fileId: string
+): Promise<RepositoryFileContentResponse> {
+  return api.get<RepositoryFileContentResponse>(
+    `/workspaces/${workspaceId}/repos/${repoId}/files/${fileId}`
+  );
+}
+
 export async function deleteRepository(workspaceId: string, repoId: string): Promise<{ message: string }> {
   return api.delete(`/workspaces/${workspaceId}/repos/${repoId}`);
 }
