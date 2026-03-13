@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef , useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
+import { cn } from "@/lib/utils";
+
 const FIGURES = [
   {
     id: "fig-1",
@@ -44,7 +46,11 @@ const item = {
 
 export function FeatureFiguresSection() {
   return (
-    <section className="hero-dark bg-[#0a0a0a] px-4 py-16 md:py-24 lg:px-8">
+    <section
+      id="features"
+      className="hero-dark bg-[#0a0a0a] px-4 py-16 md:py-24 lg:px-8"
+      aria-labelledby="features-heading"
+    >
       <div className="mx-auto max-w-6xl">
         <motion.div
           className="mb-12 max-w-3xl md:mb-16"
@@ -53,7 +59,10 @@ export function FeatureFiguresSection() {
           viewport={{ once: true }}
           transition={{ duration: 0.4 }}
         >
-          <h2 className="mb-3 text-2xl font-semibold tracking-tight text-white md:text-3xl lg:text-4xl">
+          <h2
+            id="features-heading"
+            className="mb-3 text-2xl font-semibold tracking-tight text-white md:text-3xl lg:text-4xl"
+          >
             Understand any repository without burning your AI tokens.
           </h2>
           <p className="text-base leading-relaxed text-zinc-400 md:text-lg">
@@ -69,22 +78,24 @@ export function FeatureFiguresSection() {
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, margin: "-60px" }}
+          role="list"
         >
           {FIGURES.map((fig) => (
             <motion.article
               key={fig.id}
               variants={item}
               className="group flex flex-col"
+              role="listitem"
             >
               <span className="mb-4 inline-block text-xs font-medium uppercase tracking-wider text-zinc-500">
                 {fig.label}
               </span>
               <div
-                className={`
-                  relative mb-8 flex items-center justify-center overflow-hidden rounded-xl
-                  transition-all duration-300
-                  min-h-[240px] md:min-h-[300px] lg:min-h-[340px]
-                `}
+                className={cn(
+                  "relative mb-8 flex min-h-[240px] items-center justify-center overflow-hidden rounded-xl",
+                  "transition-all duration-300",
+                  "md:min-h-[300px] lg:min-h-[340px]"
+                )}
               >
                 <fig.Illustration />
               </div>
@@ -178,6 +189,7 @@ function FigLayers() {
 
     animRef.current = () => { a1.stop(); a2.stop(); };
     return () => { a1.stop(); a2.stop(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lensX, lensY, scanPath are stable; only hovered should trigger
   }, [hovered]);
 
   // Handle: bottom-right of lens, clamped inside window
@@ -326,8 +338,8 @@ function FigLayers() {
           {/* Specular arc — top-left shine (exact style from reference SVG) */}
           <motion.path
             d={useTransform(
-              [lensX, lensY] as const,
-              ([cx, cy]: [number, number]) => {
+              [lensX, lensY],
+              ([cx, cy]: number[]) => {
                 const r = LENS_R - 4;
                 const a1 = (-145 * Math.PI) / 180;
                 const a2 = (-45  * Math.PI) / 180;
@@ -389,219 +401,159 @@ function FigLayers() {
 
 
 
-
-const SYSTEM_PROMPT = `You are RepoLens AI — an expert assistant for understanding codebases.
-You help developers explore repositories, trace dependencies, understand architecture, and answer code questions.
-Keep responses SHORT — max 2 sentences. Be direct and technical. No fluff.`;
-
 const MAX_MESSAGES = 3;
 const MAX_WORDS = 8;
-
+ 
+// Suggested chip replies — matched by exact chip text
+const CHIP_REPLIES: Record<string, string> = {
+  "What does AuthService do?":
+    "AuthService owns the full auth lifecycle — login, token issuance, refresh, and revocation. It sits behind middleware applied to every protected route.",
+  "Trace dependencies of UserController":
+    "UserController depends on UserService, AuthGuard, and the Prisma ORM layer. Pull any of those and the DI container throws before the app boots.",
+  "Explain the folder structure":
+    "The repo uses a feature-slice layout — each domain folder owns its controller, service, DTO, and schema. Top-level folders map 1:1 to API route groups.",
+  "Where is JWT handled?":
+    "JWT signing lives in auth/jwt.strategy.ts, pulling the secret from ConfigService. Every guarded route runs the token through a Passport strategy before the handler executes.",
+};
+ 
+// For anything the user types freely — honest, codebase-AI-style
+const FREE_RESPONSES = [
+  "Connect a real repo and I can answer that precisely, right now I'm running on demo data.",
+  "That's outside my demo index. Link your repository and I'll trace it to the exact file and line.",
+  "No match in the current snapshot. With a live repo connected, I'd resolve that against the full AST.",
+  "Demo mode only covers the sample project. Point me at a real codebase and I'll give you a proper answer.",
+];
+let _freeIdx = 0;
+ 
+function getReply(query: string): string {
+  if (CHIP_REPLIES[query]) return CHIP_REPLIES[query];
+  return FREE_RESPONSES[_freeIdx++ % FREE_RESPONSES.length];
+}
+ 
 const SUGGESTED = [
   "What does AuthService do?",
   "Trace dependencies of UserController",
   "Explain the folder structure",
   "Where is JWT handled?",
 ];
-
+ 
 function getWordCount(text: string) {
   return text.trim().split(/\s+/).filter((w) => w.length > 0).length;
 }
-
+ 
 function LoadingDots() {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+    <span className="inline-flex items-center gap-[3px]">
       {[0, 1, 2].map((i) => (
-        <span key={i} style={{
-          width: 4, height: 4, borderRadius: "50%",
-          background: "rgba(255,255,255,0.4)",
-          display: "inline-block",
-          animation: `figDot 1.2s ease-in-out ${i * 0.2}s infinite`,
-        }} />
+        <span
+          key={i}
+          data-delay={i}
+          className="fig-dot h-1 w-1 shrink-0 rounded-full bg-white/40 inline-block"
+        />
       ))}
     </span>
   );
 }
-
+ 
 export function FigBlocks() {
   type Msg = { role: "user" | "assistant"; content: string };
-
+ 
   const [messages, setMessages]     = useState<Msg[]>([]);
   const [input, setInput]           = useState("");
   const [loading, setLoading]       = useState(false);
   const [streamText, setStreamText] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef  = useRef<HTMLInputElement>(null);
-
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef         = useRef<HTMLInputElement>(null);
+ 
   const wordCount   = getWordCount(input);
   const isOver      = wordCount > MAX_WORDS;
   const userCount   = messages.filter((m) => m.role === "user").length;
   const isMaxed     = userCount >= MAX_MESSAGES;
   const canSend     = !!input.trim() && !isOver && !isMaxed && !loading;
-
+ 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Scroll only the chat container — never the document. Prevents page jitter.
+    if ((messages.length > 0 || streamText || loading) && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
   }, [messages, streamText, loading]);
-
+ 
   const send = useCallback(async (overrideText?: string | React.MouseEvent) => {
     const text = typeof overrideText === "string" ? overrideText : input;
     const trimmed = text.trim();
     if (!trimmed || isOver || isMaxed || loading) return;
-
+ 
     const userMsg: Msg = { role: "user", content: trimmed };
     const history = [...messages, userMsg];
     setMessages(history);
     setInput("");
     setLoading(true);
     setStreamText("");
-
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 300,
-          system: SYSTEM_PROMPT,
-          messages: history.map((m) => ({ role: m.role, content: m.content })),
-          stream: true,
-        }),
-      });
-
-      const reader = res.body!.getReader();
-      const dec    = new TextDecoder();
-      let full     = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const line of dec.decode(value).split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          const d = line.slice(6);
-          if (d === "[DONE]") continue;
-          try {
-            const p = JSON.parse(d);
-            if (p.type === "content_block_delta" && p.delta?.text) {
-              full += p.delta.text;
-              setStreamText(full);
-            }
-          } catch {}
-        }
-      }
-
-      setMessages((prev) => [...prev, { role: "assistant", content: full }]);
-      setStreamText("");
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Connection issue — try again." },
-      ]);
-      setStreamText("");
-    } finally {
-      setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
+ 
+    // Pick a reply based on what the user typed
+    const response = getReply(trimmed);
+ 
+    // Loading dots phase — 900ms
+    await new Promise((r) => setTimeout(r, 900));
+    setLoading(false);
+ 
+    // Typewriter phase
+    let full = "";
+    for (let i = 0; i < response.length; i++) {
+      full += response[i];
+      setStreamText(full);
+      // Vary speed slightly for natural feel
+      const delay = response[i] === "." || response[i] === "," ? 55 : 18;
+      await new Promise((r) => setTimeout(r, delay));
     }
-  }, [input, messages, isOver, isMaxed, loading]);
-
+ 
+    setMessages((prev) => [...prev, { role: "assistant", content: full }]);
+    setStreamText("");
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, [input, messages, isMaxed, isOver, loading]);
+ 
   const clearAll = () => {
     setMessages([]);
     setStreamText("");
     setInput("");
     setTimeout(() => inputRef.current?.focus(), 50);
   };
-
+ 
   const isEmpty = messages.length === 0 && !streamText && !loading;
-
+ 
   return (
-    <div style={{
-      width: "100%",
-      fontFamily: "'Berkeley Mono','Fira Code','Cascadia Code',monospace",
-    }}>
+    <div className="w-full font-mono">
       {/* ── Main box — FIXED height, no grow ── */}
-      <div style={{
-        borderRadius: 10,
-        border: "1px solid rgba(255,255,255,0.08)",
-        background: "#0a0a0a",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        height: 220,
-      }}>
-
+      <div className="flex h-[230px] flex-col overflow-hidden rounded-[10px] border border-white/8 bg-[#0a0a0a]">
         {/* Messages area — fixed height, scrolls internally */}
-        <div style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "10px 12px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          scrollbarWidth: "none",
-        }}>
+        <div
+          ref={scrollContainerRef}
+          className="fig-blocks-scroll flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-2.5"
+        >
           {/* ── Premium empty state ── */}
           {isEmpty && (
-            <div style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              padding: "4px 0",
-            }}>
+            <div className="flex flex-1 flex-col items-center justify-center gap-2.5 py-1">
               {/* Icon + label */}
-              <div style={{ textAlign: "center" }}>
-                <div style={{
-                  width: 24, height: 24, borderRadius: 7, margin: "0 auto 6px",
-                  background: "rgba(255,255,255,0.07)",
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 13, color: "rgba(255,255,255,0.55)",
-                }}>⬡</div>
-                <div style={{
-                  fontSize: 10, color: "rgba(255,255,255,0.52)",
-                  letterSpacing: "0.1em", textTransform: "uppercase",
-                  marginBottom: 3,
-                }}>Ask about your codebase</div>
-                <div style={{
-                  fontSize: 9, color: "rgba(255,255,255,0.25)",
-                  letterSpacing: "0.06em",
-                }}>trace · explore · understand</div>
+              <div className="text-center">
+                <div className="mx-auto mb-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] border border-white/14 bg-white/7 text-[13px] text-white/55">
+                  ⬡
+                </div>
+                <div className="mb-0.5 text-[10px] uppercase tracking-widest text-white/52">
+                  Ask about your codebase
+                </div>
+                <div className="text-[9px] tracking-[0.06em] text-white/25">
+                  trace · explore · understand
+                </div>
               </div>
 
               {/* Suggested chips */}
-              <div style={{
-                display: "flex", flexWrap: "wrap",
-                gap: 5, justifyContent: "center",
-                maxWidth: 280,
-              }}>
+              <div className="flex max-w-[280px] flex-wrap justify-center gap-1.5">
                 {SUGGESTED.map((s, i) => (
                   <button
                     key={i}
+                    type="button"
                     onClick={() => send(s)}
-                    style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      color: "rgba(255,255,255,0.5)",
-                      fontSize: 9,
-                      padding: "4px 8px",
-                      borderRadius: 5,
-                      cursor: "pointer",
-                      letterSpacing: "0.02em",
-                      fontFamily: "inherit",
-                      transition: "all 0.18s",
-                      lineHeight: 1.4,
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.11)";
-                      (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.88)";
-                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.24)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)";
-                      (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.5)";
-                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.12)";
-                    }}
+                    className="cursor-pointer rounded-md border border-white/12 bg-white/5 px-2 py-1 font-inherit text-[9px] leading-relaxed tracking-[0.02em] text-white/50 transition-all duration-[0.18s] hover:border-white/24 hover:bg-white/11 hover:text-white/88"
                   >
                     {s}
                   </button>
@@ -614,43 +566,22 @@ export function FigBlocks() {
           {messages.map((msg, i) =>
             msg.role === "user" ? (
               /* User bubble — right */
-              <div key={i} style={{
-                alignSelf: "flex-end",
-                maxWidth: "78%",
-                padding: "5px 9px",
-                borderRadius: "8px 8px 2px 8px",
-                background: "rgba(255,255,255,0.09)",
-                border: "1px solid rgba(255,255,255,0.13)",
-                color: "rgba(255,255,255,0.8)",
-                fontSize: 10,
-                lineHeight: 1.55,
-                animation: "figFadeUp 0.22s ease",
-              }}>
+              <div
+                key={i}
+                className="max-w-[78%] self-end rounded-br-sm rounded-bl-lg rounded-tl-lg rounded-tr-lg border border-white/13 bg-white/9 px-2.5 py-1.5 text-[10px] leading-[1.55] text-white/80 animate-[figFadeUp_0.22s_ease]"
+              >
                 {msg.content}
               </div>
             ) : (
               /* AI bubble — left */
-              <div key={i} style={{
-                alignSelf: "flex-start",
-                display: "flex", gap: 6,
-                animation: "figFadeUp 0.22s ease",
-              }}>
-                <div style={{
-                  width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 9, color: "rgba(255,255,255,0.4)", marginTop: 1,
-                }}>⬡</div>
-                <div style={{
-                  maxWidth: "calc(78% - 24px)",
-                  padding: "5px 9px",
-                  borderRadius: "8px 8px 8px 2px",
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                  color: "rgba(255,255,255,0.68)",
-                  fontSize: 10, lineHeight: 1.55,
-                }}>
+              <div
+                key={i}
+                className="flex gap-1.5 self-start animate-[figFadeUp_0.22s_ease]"
+              >
+                <div className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border border-white/12 bg-white/6 text-[9px] text-white/40">
+                  ⬡
+                </div>
+                <div className="max-w-[calc(78%-24px)] rounded-br-lg rounded-bl-sm rounded-tl-lg rounded-tr-lg border border-white/7 bg-white/4 px-2.5 py-1.5 text-[10px] leading-[1.55] text-white/68">
                   {msg.content}
                 </div>
               </div>
@@ -659,101 +590,63 @@ export function FigBlocks() {
 
           {/* Streaming text */}
           {streamText && (
-            <div style={{ alignSelf: "flex-start", display: "flex", gap: 6, animation: "figFadeUp 0.22s ease" }}>
-              <div style={{
-                width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 9, color: "rgba(255,255,255,0.4)", marginTop: 1,
-              }}>⬡</div>
-              <div style={{
-                maxWidth: "calc(78% - 24px)",
-                padding: "5px 9px",
-                borderRadius: "8px 8px 8px 2px",
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                color: "rgba(255,255,255,0.68)",
-                fontSize: 10, lineHeight: 1.55,
-              }}>
+            <div className="flex gap-1.5 self-start animate-[figFadeUp_0.22s_ease]">
+              <div className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border border-white/12 bg-white/6 text-[9px] text-white/40">
+                ⬡
+              </div>
+              <div className="max-w-[calc(78%-24px)] rounded-br-lg rounded-bl-sm rounded-tl-lg rounded-tr-lg border border-white/7 bg-white/4 px-2.5 py-1.5 text-[10px] leading-[1.55] text-white/68">
                 {streamText}
-                <span style={{
-                  display: "inline-block", width: 1.5, height: 10,
-                  background: "rgba(255,255,255,0.6)",
-                  marginLeft: 2, verticalAlign: "middle", borderRadius: 1,
-                  animation: "figBlink 0.7s step-end infinite",
-                }} />
+                <span className="ml-0.5 inline-block h-2.5 w-[1.5px] align-middle rounded-sm bg-white/60 animate-[figBlink_0.7s_step-end_infinite]" />
               </div>
             </div>
           )}
 
           {/* Loading dots — before stream begins */}
           {loading && !streamText && (
-            <div style={{ alignSelf: "flex-start", display: "flex", gap: 6 }}>
-              <div style={{
-                width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 9, color: "rgba(255,255,255,0.4)", marginTop: 1,
-              }}>⬡</div>
-              <div style={{
-                padding: "7px 10px",
-                borderRadius: "8px 8px 8px 2px",
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
-              }}>
+            <div className="flex gap-1.5 self-start">
+              <div className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border border-white/12 bg-white/6 text-[9px] text-white/40">
+                ⬡
+              </div>
+              <div className="rounded-br-lg rounded-bl-sm rounded-tl-lg rounded-tr-lg border border-white/7 bg-white/4 px-2.5 py-1.5">
                 <LoadingDots />
               </div>
             </div>
           )}
 
-          <div ref={bottomRef} />
         </div>
 
         {/* ── Input row ── */}
-        <div style={{
-          borderTop: "1px solid rgba(255,255,255,0.07)",
-          background: "rgba(255,255,255,0.015)",
-          padding: "7px 10px",
-          display: "flex", alignItems: "center", gap: 7,
-        }}>
+        <div className="flex items-center gap-1.5 border-t border-white/7 bg-white/1.5 px-2.5 py-1.5">
           {/* Input + word counter */}
-          <div style={{ position: "relative", flex: 1 }}>
+          <div className="relative flex-1">
             <input
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); send(); } }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  send();
+                }
+              }}
               placeholder={isMaxed ? "Clear to continue..." : "Comment..."}
               disabled={isMaxed || loading}
               maxLength={100}
-              style={{
-                width: "100%",
-                background: "rgba(255,255,255,0.04)",
-                border: `1px solid ${isOver ? "rgba(255,80,80,0.45)" : "rgba(255,255,255,0.09)"}`,
-                borderRadius: 6,
-                padding: "5px 32px 5px 9px",
-                color: "rgba(255,255,255,0.82)",
-                fontSize: 10,
-                fontFamily: "inherit",
-                letterSpacing: "0.02em",
-                outline: "none",
-                opacity: isMaxed ? 0.4 : 1,
-                cursor: isMaxed ? "not-allowed" : "text",
-                boxSizing: "border-box",
-                transition: "border-color 0.18s",
-              }}
+              className={cn(
+                "w-full rounded-md border bg-white/4 px-2.5 py-1.5 pr-8 font-inherit text-[10px] tracking-[0.02em] text-white/82 outline-none transition-[border-color] duration-[0.18s]",
+                isOver && "border-red-500/45",
+                !isOver && "border-white/9",
+                isMaxed && "cursor-not-allowed opacity-40",
+                !isMaxed && "cursor-text"
+              )}
             />
-            {/* Word counter */}
             {input.length > 0 && (
-              <span style={{
-                position: "absolute", right: 7, top: "50%",
-                transform: "translateY(-50%)",
-                fontSize: 8, fontFamily: "inherit",
-                color: isOver ? "rgba(255,80,80,0.7)" : "rgba(255,255,255,0.22)",
-                pointerEvents: "none", letterSpacing: "0.04em",
-              }}>
+              <span
+                className={cn(
+                  "pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 font-inherit text-[8px] tracking-[0.04em]",
+                  isOver ? "text-red-500/70" : "text-white/22"
+                )}
+              >
                 {wordCount}/{MAX_WORDS}
               </span>
             )}
@@ -761,127 +654,110 @@ export function FigBlocks() {
 
           {/* Send button */}
           <button
-            onClick={send}
+            type="button"
+            onClick={() => send()}
             disabled={!canSend}
-            style={{
-              width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-              border: `1px solid ${canSend ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.07)"}`,
-              background: canSend ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.03)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: canSend ? "pointer" : "not-allowed",
-              color: canSend ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.2)",
-              transition: "all 0.18s",
-            }}
-            onMouseEnter={(e) => {
-              if (canSend) {
-                (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.16)";
-                (e.currentTarget as HTMLElement).style.transform = "scale(1.06)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = canSend
-                ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.03)";
-              (e.currentTarget as HTMLElement).style.transform = "scale(1)";
-            }}
+            className={cn(
+              "flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md border transition-all duration-[0.18s]",
+              canSend
+                ? "cursor-pointer border-white/18 bg-white/10 text-white/75 hover:scale-[1.06] hover:bg-white/16"
+                : "cursor-not-allowed border-white/7 bg-white/3 text-white/20"
+            )}
           >
             {loading ? (
-              <div style={{
-                width: 10, height: 10,
-                border: "1.5px solid rgba(255,255,255,0.15)",
-                borderTopColor: "rgba(255,255,255,0.6)",
-                borderRadius: "50%",
-                animation: "figSpin 0.7s linear infinite",
-              }} />
+              <div className="h-2.5 w-2.5 animate-[figSpin_0.7s_linear_infinite] rounded-full border-[1.5px] border-white/15 border-t-white/60" />
             ) : (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-                <path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"
-                  stroke="currentColor" strokeWidth="2"
-                  strokeLinecap="round" strokeLinejoin="round" />
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                className="shrink-0"
+              >
+                <path
+                  d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             )}
           </button>
         </div>
 
         {/* ── Footer ── */}
-        <div style={{
-          display: "flex", alignItems: "center",
-          justifyContent: "space-between",
-          padding: "3px 10px 7px",
-        }}>
-          <span style={{
-            fontSize: 8, color: "rgba(255,255,255,0.18)", letterSpacing: "0.05em",
-          }}>
+        <div className="flex items-center justify-between px-2.5 pb-1.5 pt-0.5">
+          <span className="text-[8px] tracking-[0.05em] text-white/18">
             {isMaxed ? "max reached" : `${MAX_MESSAGES - userCount} left`}
           </span>
           {messages.length > 0 && (
             <button
+              type="button"
               onClick={clearAll}
-              style={{
-                fontSize: 8, background: "none", border: "none",
-                color: "rgba(255,255,255,0.2)", cursor: "pointer",
-                fontFamily: "inherit", letterSpacing: "0.05em", padding: 0,
-                transition: "color 0.18s",
-              }}
-              onMouseEnter={(e) => { (e.target as HTMLElement).style.color = "rgba(255,255,255,0.5)"; }}
-              onMouseLeave={(e) => { (e.target as HTMLElement).style.color = "rgba(255,255,255,0.2)"; }}
+              className="border-none bg-transparent p-0 font-inherit text-[8px] tracking-[0.05em] text-white/20 cursor-pointer transition-colors duration-[0.18s] hover:text-white/50"
             >
               clear all
             </button>
           )}
         </div>
       </div>
-
-      <style>{`
-        @keyframes figDot {
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
-          40% { transform: scale(1); opacity: 1; }
-        }
-        @keyframes figFadeUp {
-          from { opacity: 0; transform: translateY(5px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes figBlink {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0; }
-        }
-        @keyframes figSpin { to { transform: rotate(360deg); } }
-        ::-webkit-scrollbar { display: none; }
-      `}</style>
     </div>
   );
 }
 
 
+// ─── FigRays — OrbitingCircles with CompanyMarquee logos ──────────────────────
+//
+//  Uses OrbitingCircles with logos from CompanyMarquee (hero-dark color scheme).
+//  Icons orbit like the Magic UI demo. Change sizes below to adjust icon dimensions.
+//
+import { OrbitingCircles } from "@/components/ui/orbiting-circles";
+import {
+  GitHubLogo,
+  VercelLogo,
+  OpenAILogo,
+  DigitalOceanLogo,
+  PostgreSQLLogo,
+  AwsEc2Logo,
+} from "@/components/landing/CompanyMarquee";
 
-function FigRays() {
+/** Icon sizes in px — change these to resize logos on each orbit */
+const OUTER_ICON_SIZE = 36;
+const INNER_ICON_SIZE = 24;
+
+export function FigRays() {
   return (
-    <motion.svg
-      viewBox="0 0 120 100"
-      className="h-44 w-52 text-zinc-600 transition-colors duration-300 group-hover:text-zinc-500 md:h-52 md:w-60 lg:h-64 lg:w-72"
-      initial="idle"
-      whileHover="hover"
-      variants={{
-        idle: {},
-        hover: { scale: 1.02 },
-      }}
-    >
-      {[0, 1, 2, 3, 4].map((i) => (
-        <motion.rect
-          key={i}
-          x={24 + i * 18}
-          y={20 + i * 4}
-          width="14"
-          height="56"
-          rx="1"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          variants={{
-            idle: { opacity: 0.4 + i * 0.12 },
-            hover: { opacity: 0.7 + i * 0.08 },
-          }}
-        />
-      ))}
-    </motion.svg>
+    <div className="relative h-full w-full min-h-[240px] overflow-hidden">
+      <div className="absolute inset-0">
+        <OrbitingCircles
+        iconSize={OUTER_ICON_SIZE}
+        radius={100}
+        className="text-white/70"
+      >
+        <GitHubLogo size={OUTER_ICON_SIZE} />
+        <VercelLogo size={OUTER_ICON_SIZE} />
+        <OpenAILogo size={OUTER_ICON_SIZE} />
+        <DigitalOceanLogo size={OUTER_ICON_SIZE} />
+        <PostgreSQLLogo size={OUTER_ICON_SIZE} />
+        <AwsEc2Logo size={OUTER_ICON_SIZE} />
+      </OrbitingCircles>
+      </div>
+      <div className="absolute inset-0">
+        <OrbitingCircles
+        iconSize={INNER_ICON_SIZE}
+        radius={55}
+        reverse
+        speed={2}
+        className="text-white/50"
+      >
+        <GitHubLogo size={INNER_ICON_SIZE} />
+        <VercelLogo size={INNER_ICON_SIZE} />
+        <OpenAILogo size={INNER_ICON_SIZE} />
+        <DigitalOceanLogo size={INNER_ICON_SIZE} />
+      </OrbitingCircles>
+      </div>
+    </div>
   );
 }
+ 

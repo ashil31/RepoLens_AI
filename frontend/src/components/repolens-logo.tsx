@@ -21,14 +21,17 @@ export interface RepoLensLogoProps {
   className?: string;
   /** When true, logo uses width/height 100% to fill the parent (use with h-full w-full on container) */
   fillContainer?: boolean;
+  /** Stable ID for SVG gradients (avoids hydration mismatch). Pass when logo is in initial HTML (e.g. navbar). */
+  id?: string;
 }
 
 /**
  * RepoLens logo (folder + lens). Uses CSS variables from theme (--card, --muted, --accent, etc.)
  * so it adapts to light/dark/pure-light/classic-dark. Use one place, import from here.
  */
-export function RepoLensLogo({ size = "md", className, fillContainer }: RepoLensLogoProps) {
-  const id = useId().replace(/:/g, "");
+export function RepoLensLogo({ size = "md", className, fillContainer, id: idProp }: RepoLensLogoProps) {
+  const generatedId = useId().replace(/:/g, "-");
+  const id = idProp ?? generatedId;
   const px = sizeMap[size];
 
   const svgProps = fillContainer

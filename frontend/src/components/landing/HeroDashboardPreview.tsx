@@ -20,7 +20,7 @@ export function HeroDashboardPreview() {
       {/* Narrow sidebar strip */}
       <div className="relative flex w-12 shrink-0 flex-col items-center gap-2 border-r border-border bg-card/80 py-3 sm:w-14">
         <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md sm:h-9 sm:w-9">
-          <RepoLensLogo fillContainer />
+          <RepoLensLogo id="hero-dashboard-logo" fillContainer />
         </div>
         <div className="flex flex-col gap-1">
           {[Folder, GitBranch].map((Icon, i) => (

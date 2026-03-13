@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
+import { ScrollbarHideOnLanding } from "@/components/landing/ScrollbarHideOnLanding";
 import { setAuthTokenGetter, setOnRefreshSuccess, setOnRefreshFailure } from "@/lib/api/client";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -34,6 +35,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         disableTransitionOnChange={false}
         themes={["light", "dark", "system", "pure-light", "classic-dark"]}
       >
+        <ScrollbarHideOnLanding />
         {children}
         <Toaster />
       </ThemeProvider>

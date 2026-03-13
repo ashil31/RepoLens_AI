@@ -57,6 +57,13 @@ export const addRepositoryHandler = catchAsync(async (req: Request, res: Respons
     const { owner, name } = parseGitHubUrl(url)
 
     // 1. Check if a job is already in progress for this repo
+    if (typeof (prisma as any).analysisJob === "undefined") {
+        throw new AppError(
+            "Prisma client is out of sync. Run 'npx prisma generate' in the backend folder and restart the server.",
+            HTTPSTATUS.INTERNAL_SERVER_ERROR,
+            "PRISMA_CLIENT_SYNC"
+        )
+    }
     const existingJob = await prisma.analysisJob.findFirst({
         where: {
             repository: {

@@ -7,9 +7,9 @@ import { FeatureFiguresSection } from "@/components/landing/FeatureFiguresSectio
 
 export default function Home(): ReactNode {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
       <Navbar variant="landing" />
-      <main className="flex flex-1 flex-col">
+      <main className="flex w-full flex-1 flex-col">
         <HeroSection />
         <CompanyMarquee />
         <FeatureFiguresSection />

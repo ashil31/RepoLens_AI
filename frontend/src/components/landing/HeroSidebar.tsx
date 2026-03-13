@@ -36,7 +36,7 @@ export function HeroSidebar() {
             className="relative shrink-0 overflow-hidden rounded-md"
             style={{ width: 40, height: 40 }}
           >
-            <RepoLensLogo fillContainer />
+            <RepoLensLogo id="hero-sidebar-logo" fillContainer />
           </div>
           <span className="min-w-0 flex-1 truncate text-left text-sm">
             Demo workspace

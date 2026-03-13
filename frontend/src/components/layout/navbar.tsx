@@ -71,7 +71,7 @@ export function Navbar({ variant = "default" }: NavbarProps) {
       <Link
         href="/login"
         className={cn(
-          "text-sm transition-colors hover:opacity-90",
+          "text-sm font-medium transition-colors hover:opacity-90",
           isLanding
             ? "text-zinc-400 hover:text-white"
             : "text-muted-foreground hover:text-foreground",
@@ -85,8 +85,9 @@ export function Navbar({ variant = "default" }: NavbarProps) {
           size="sm"
           variant={isLanding ? "secondary" : "default"}
           className={cn(
-            "text-sm font-medium",
-            isLanding && "bg-white text-black hover:bg-zinc-200",
+            "text-sm font-semibold",
+            isLanding &&
+              "bg-white text-black shadow-sm hover:bg-zinc-100 hover:shadow",
           )}
         >
           Sign up
@@ -100,11 +101,11 @@ export function Navbar({ variant = "default" }: NavbarProps) {
       className={cn(
         "sticky top-0 z-50 w-full border-b backdrop-blur supports-backdrop-filter:bg-background/60",
         isLanding
-          ? "border-white/10 bg-[#0a0a0a]/90 text-white"
+          ? "border-white/8 bg-[#0a0a0a]/95 text-white"
           : "border-border bg-background/95",
       )}
     >
-      <div className="container flex h-12 items-center justify-between gap-4 px-4 sm:h-14 sm:px-6">
+      <div className="container mx-auto flex h-12 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:h-14 sm:px-6">
         <Link
           href="/"
           className={cn(
@@ -113,15 +114,39 @@ export function Navbar({ variant = "default" }: NavbarProps) {
           )}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden sm:h-12 sm:w-12">
-            <RepoLensLogo size="lg" className="h-full w-full" />
+            <RepoLensLogo id="navbar-logo" size="lg" className="h-full w-full" />
           </span>
           <span className="truncate sm:mt-0.5 sm:-ml-1">RepoLens</span>
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden shrink-0 items-center gap-3 md:flex md:gap-4">
-          {navLinks}
-          {!isLanding && <ThemeToggle />}
+        <nav className="hidden shrink-0 items-center gap-6 md:flex md:gap-8">
+          {isLanding && (
+            <div className="flex items-center gap-6 text-sm">
+              <Link
+                href="#features"
+                className="text-zinc-400 transition-colors hover:text-white"
+              >
+                Features
+              </Link>
+              <Link
+                href="/dashboard"
+                className="text-zinc-400 transition-colors hover:text-white"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="#"
+                className="text-zinc-400 transition-colors hover:text-white"
+              >
+                Pricing
+              </Link>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            {navLinks}
+            {!isLanding && <ThemeToggle />}
+          </div>
         </nav>
 
         {/* Mobile/tablet: menu button (→ X when open) + dropdown below navbar */}

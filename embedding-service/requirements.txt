@@ -4,3 +4,4 @@ pydantic
 torch
 transformers==4.37.2
 FlagEmbedding
+peft

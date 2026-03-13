@@ -15,8 +15,8 @@ import { HeroDashboardPreview } from "./HeroDashboardPreview";
 const MOCK_REPO: Repository = {
   id: "hero-demo",
   name: "RepoLens_AI",
-  owner: "acme",
-  fullName: "acme/RepoLens_AI",
+  owner: "developer",
+  fullName: "developer/RepoLens_AI",
   description: "AI-powered repository analysis and documentation.",
   language: "TypeScript",
   stars: 128,
@@ -25,12 +25,12 @@ const MOCK_REPO: Repository = {
     { id: "2", path: "src/components/repository/RepoChat.tsx", language: "typescript" },
     { id: "3", path: "backend/src/services/repository.service.ts", language: "typescript" },
   ],
-  repoUrl: "https://github.com/acme/RepoLens_AI",
+  repoUrl: "https://github.com/",
 };
 
 const MOCK_DOC = `# Repository Overview
 
-This repository is **acme/RepoLens_AI**, primarily written in **TypeScript**.
+This repository is **developer/RepoLens_AI**, primarily written in **TypeScript**.
 
 ## Summary
 
