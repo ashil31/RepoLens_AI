@@ -99,7 +99,7 @@ export function Navbar({ variant = "default" }: NavbarProps) {
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 w-full border-b backdrop-blur supports-backdrop-filter:bg-background/60",
+        "fixed left-0 right-0 top-0 z-50 w-full border-b backdrop-blur supports-backdrop-filter:bg-background/60",
         isLanding
           ? "border-white/8 bg-[#0a0a0a]/95 text-white"
           : "border-border bg-background/95",

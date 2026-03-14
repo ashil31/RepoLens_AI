@@ -27,7 +27,7 @@ interface AppState {
   setSelectedWorkspaceId: (id: string | null) => void;
 
   // Repo page: command palette actions (e.g. "Open architecture")
-  repoCommandAction: "open-architecture" | "export-report" | "focus-chat" | "open-docs" | "share-report" | "open-files" | null;
+  repoCommandAction: "open-architecture" | "open-architecture-notes" | "export-report" | "focus-chat" | "open-docs" | "share-report" | "open-files" | null;
   setRepoCommandAction: (action: AppState["repoCommandAction"]) => void;
 
   // Repo chat: focus input (trigger from Cmd+K "Ask RepoLens")

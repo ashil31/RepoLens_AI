@@ -27,6 +27,7 @@ import {
   FileDown,
   FileText,
   Share2,
+  FileEdit,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -158,6 +159,18 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">Open architecture</p>
                   <p className="truncate text-xs text-muted-foreground">View architecture graph</p>
+                </div>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => run(() => setRepoCommandAction("open-architecture-notes"))}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <FileEdit className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">Open architecture notes</p>
+                  <p className="truncate text-xs text-muted-foreground">View AI-generated architecture notes</p>
                 </div>
               </CommandItem>
               <CommandItem

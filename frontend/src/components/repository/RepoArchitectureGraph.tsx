@@ -11,6 +11,7 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Node,
   type Edge,
   type Connection,
@@ -72,6 +73,19 @@ function FileNode({ data }: { data: { label: string; path?: string; language?: s
 
 const nodeTypes = { file: FileNode };
 
+function ReactFlowInstanceCapture({
+  onInstance,
+}: {
+  onInstance: (instance: ReturnType<typeof useReactFlow> | null) => void;
+}) {
+  const instance = useReactFlow();
+  useEffect(() => {
+    onInstance(instance);
+    return () => onInstance(null);
+  }, [instance, onInstance]);
+  return null;
+}
+
 const PLACEHOLDER_NODES: Node[] = [
   { id: "1", type: "input", position: { x: 100, y: 80 }, data: { label: "Frontend" } },
   { id: "2", type: "default", position: { x: 100, y: 180 }, data: { label: "API" } },
@@ -89,6 +103,9 @@ type RepoArchitectureGraphProps = {
   files?: RepositoryFile[];
   dependencies?: RepositoryDependency[];
   className?: string;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
+  /** Called when ReactFlow instance is ready (for export/fitView) */
+  onReactFlowInstance?: (instance: ReturnType<typeof useReactFlow> | null) => void;
 };
 
 async function layoutWithElk(nodes: Node[], edges: Edge[]): Promise<{ nodes: Node[]; edges: Edge[] }> {
@@ -122,6 +139,8 @@ export function RepoArchitectureGraph({
   files = [],
   dependencies = [],
   className,
+  containerRef,
+  onReactFlowInstance,
 }: RepoArchitectureGraphProps) {
   const { nodes: initialNodes, edges: initialEdges, hasRealData } = useMemo(() => {
     if (files.length === 0 && dependencies.length === 0) {
@@ -166,6 +185,7 @@ export function RepoArchitectureGraph({
 
   return (
     <div
+      ref={containerRef}
       className={cn(
         "repoArchitectureGraph h-full w-full rounded-lg border border-border bg-card",
         className
@@ -179,8 +199,11 @@ export function RepoArchitectureGraph({
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         fitView
+        fitViewOptions={{ padding: 0.2, includeHiddenNodes: true }}
+        onlyRenderVisibleElements={false}
         className="rounded-lg"
       >
+        {onReactFlowInstance && <ReactFlowInstanceCapture onInstance={onReactFlowInstance} />}
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
         {hasRealData && edges.length === 0 && (
           <Panel position="top-center" className="rounded-lg border border-border bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">

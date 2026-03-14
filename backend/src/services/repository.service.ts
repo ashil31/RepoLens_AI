@@ -14,6 +14,7 @@ import { JobStep } from "@prisma/client"
 import { parseCodeFile } from "./parser.service"
 import { filterFiles } from "../utils/fileFilter"
 import { resolveImport } from "../utils/importResolver"
+import { buildApiDependencies } from "./api-dependency.service"
 import { chunkCode } from "./chunking.service"
 import { generateBatchedEmbeddings } from "./embedding.service"
 import { AIService } from "./ai.service"
@@ -234,7 +235,18 @@ export const processRepositoryAnalysis = async (
             })
         })
 
-        await addJobLog(jobId, `Resolved ${dependencies.length} file dependencies`)
+        // API edges: frontend (axios/fetch) → backend routes
+        const apiDeps = buildApiDependencies(
+            parsedFiles.map((f) => ({ path: f.path, content: f.content, meta: f.meta }))
+        )
+        apiDeps.forEach((d) => {
+            const key = `${d.sourcePath}->${d.targetPath}`
+            if (seenEdges.has(key)) return
+            seenEdges.add(key)
+            dependencies.push(d)
+        })
+
+        await addJobLog(jobId, `Resolved ${dependencies.length} file dependencies (${apiDeps.length} API edges)`)
 
         // 5. Clear old data (before streaming new data)
         await addJobLog(jobId, "Clearing old repository data...")

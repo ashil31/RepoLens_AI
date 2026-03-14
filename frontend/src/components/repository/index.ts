@@ -1,5 +1,7 @@
 export { RepoHeader } from "./RepoHeader";
 export { RepoChat, type ConversationItem } from "./RepoChat";
+export { ExpandedPanelOverlay } from "./ExpandedPanelOverlay";
+export { ExpandedDocsView } from "./ExpandedDocsView";
 export { RepoMessages, type ChatMessage } from "./RepoMessages";
 export { RepoInput } from "./RepoInput";
 export { RepoPreviewPanel } from "./RepoPreviewPanel";
@@ -9,3 +11,5 @@ export { RepoArchitectureGraph } from "./RepoArchitectureGraph";
 export { RepoShareDialog } from "./RepoShareDialog";
 export { RepoResizableLayout } from "./RepoResizableLayout";
 export { RepoInsights } from "./RepoInsights";
+export { ArchitectureNotesMarkdown } from "./ArchitectureNotesMarkdown";
+export { RepoPageSkeleton } from "./RepoPageSkeleton";

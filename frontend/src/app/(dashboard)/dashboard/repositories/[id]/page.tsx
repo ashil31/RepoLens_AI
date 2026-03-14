@@ -1,13 +1,21 @@
 "use client";
 
-import { use, useState, useMemo, useRef, useEffect } from "react";
+import { use, useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { MessageSquare, FileText, FileEdit, FolderX } from "lucide-react";
 import {
   RepoHeader,
   RepoChat,
   RepoPreviewPanel,
   RepoShareDialog,
   RepoResizableLayout,
+  ExpandedPanelOverlay,
+  ExpandedDocsView,
+  RepoArchitectureGraph,
+  RepoFilePreview,
+  RepoInsights,
+  ArchitectureNotesMarkdown,
+  RepoPageSkeleton,
   type ChatMessage,
   type ConversationItem,
 } from "@/components/repository";
@@ -119,8 +127,27 @@ export default function RepoPage({ params }: PageProps) {
   const updateConversation = useChatStore((s) => s.updateConversation);
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState<"docs" | "files" | "architecture" | "insights">("docs");
+  const [previewMode, setPreviewMode] = useState<"docs" | "files" | "architecture" | "architecture-notes" | "insights">("docs");
   const [mobilePanel, setMobilePanel] = useState<"chat" | "docs">("chat");
+  const [expandedPanel, setExpandedPanel] = useState<"chat" | "docs" | "architecture" | "architecture-notes" | "files" | "insights" | null>(null);
+  const architectureGraphRef = useRef<HTMLDivElement | null>(null);
+  const reactFlowInstanceRef = useRef<{
+    fitView: (opts?: { padding?: number; duration?: number }) => boolean;
+    getNodes: () => { id: string; position: { x: number; y: number }; width?: number; height?: number; data?: { label?: string } }[];
+    getEdges: () => { id: string; source: string; target: string }[];
+  } | null>(null);
+  const handleReactFlowInstance = useCallback(
+    (
+      instance: {
+        fitView: (opts?: { padding?: number; duration?: number }) => boolean;
+        getNodes: () => { id: string; position: { x: number; y: number }; width?: number; height?: number; data?: { label?: string } }[];
+        getEdges: () => { id: string; source: string; target: string }[];
+      } | null
+    ) => {
+      reactFlowInstanceRef.current = instance;
+    },
+    []
+  );
   const [isAnalyzing] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -136,6 +163,7 @@ export default function RepoPage({ params }: PageProps) {
     setRepoCommandAction(null);
     queueMicrotask(() => {
       if (action === "open-architecture") setPreviewMode("architecture");
+      if (action === "open-architecture-notes") setPreviewMode("architecture-notes");
       if (action === "open-docs") setPreviewMode("docs");
       if (action === "open-files") setPreviewMode("files");
       if (action === "share-report" || action === "export-report") setShareOpen(true);
@@ -165,24 +193,28 @@ export default function RepoPage({ params }: PageProps) {
   if (isError || (!isLoading && !repo)) {
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <div className="dashboard-content-scroll min-h-0 flex-1 overflow-y-auto p-4">
-          <p className="text-muted-foreground">Repository not found.</p>
-          <Link href="/dashboard/repositories">
-            <Button variant="outline" className="mt-4">Back to repositories</Button>
-          </Link>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-4 sm:p-8">
+          <div className="flex flex-col items-center text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <FolderX className="h-7 w-7" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold text-foreground">Repository not found</h2>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              This repository may have been removed, or you don&apos;t have access to it.
+            </p>
+            <Link href="/dashboard/repositories">
+              <Button variant="outline" className="mt-6">
+                Back to repositories
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
   if (isLoading || !repo) {
-    return (
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="flex flex-1 items-center justify-center p-8">
-          <div className="h-32 w-full max-w-md animate-pulse rounded-xl bg-muted" />
-        </div>
-      </div>
-    );
+    return <RepoPageSkeleton />;
   }
 
   const repoName = repo.fullName ?? (repo.owner && repo.name ? `${repo.owner}/${repo.name}` : repo.name);
@@ -198,6 +230,7 @@ export default function RepoPage({ params }: PageProps) {
             backHref="/dashboard/repositories"
             onShare={() => setShareOpen(true)}
             onExport={() => {}}
+            canShare={false}
             status="analyzing"
           />
         </header>
@@ -354,7 +387,26 @@ export default function RepoPage({ params }: PageProps) {
   };
 
   const fullName = repo.fullName ?? (repo.owner ? `${repo.owner}/${repo.name}` : repo.name);
-  const shareContent = docContent;
+  const docsContent = (repo.documentation && repo.documentation.trim() ? repo.documentation : docContent) ?? "";
+  const architectureNotes = repo.architecture?.trim() ?? "";
+  const isPreviewVisible = true;
+  const canShare =
+    isPreviewVisible &&
+    (previewMode === "docs" || previewMode === "architecture" || previewMode === "architecture-notes");
+  const shareContent =
+    previewMode === "docs"
+      ? docsContent
+      : previewMode === "architecture-notes"
+        ? architectureNotes
+        : "";
+  const shareMode: "docs" | "architecture" | "architecture-notes" =
+    previewMode === "docs"
+      ? "docs"
+      : previewMode === "architecture"
+        ? "architecture"
+        : previewMode === "architecture-notes"
+          ? "architecture-notes"
+          : "docs";
 
   return (
     <div className="flex h-full min-h-0 w-full max-w-full flex-col gap-2 overflow-x-hidden overflow-y-hidden p-2 sm:gap-4 sm:p-4">
@@ -364,30 +416,39 @@ export default function RepoPage({ params }: PageProps) {
           backHref="/dashboard/repositories"
           onShare={() => setShareOpen(true)}
           onExport={() => {}}
+          canShare={canShare}
           status={isAnalyzing ? "analyzing" : undefined}
         />
       </header>
       {/* Mobile & tablet: single column with Chat | Docs tabs */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:hidden">
-        <div className="flex shrink-0 border-b border-border bg-muted/30 min-w-0">
+        <div className="flex shrink-0 flex-col pb-4 pt-3">
+          <div className="flex justify-center gap-1 rounded-xl bg-muted/50 p-1.5">
           <button
             type="button"
             onClick={() => setMobilePanel("chat")}
-            className={`min-w-0 flex-1 py-3 text-sm font-medium transition-colors sm:py-2.5 ${
-              mobilePanel === "chat" ? "border-b-2 border-primary text-foreground" : "text-muted-foreground"
+            className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-all sm:py-2 ${
+              mobilePanel === "chat"
+                ? "bg-background text-foreground shadow-sm ring-1 ring-border/50"
+                : "text-muted-foreground hover:text-foreground/80"
             }`}
           >
+            <MessageSquare className="h-4 w-4 shrink-0" />
             Chat
           </button>
           <button
             type="button"
             onClick={() => setMobilePanel("docs")}
-            className={`min-w-0 flex-1 py-3 text-sm font-medium transition-colors sm:py-2.5 ${
-              mobilePanel === "docs" ? "border-b-2 border-primary text-foreground" : "text-muted-foreground"
+            className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-all sm:py-2 ${
+              mobilePanel === "docs"
+                ? "bg-background text-foreground shadow-sm ring-1 ring-border/50"
+                : "text-muted-foreground hover:text-foreground/80"
             }`}
           >
+            <FileText className="h-4 w-4 shrink-0" />
             Docs
           </button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
           {isHydrated && mobilePanel === "chat" && (
@@ -403,6 +464,7 @@ export default function RepoPage({ params }: PageProps) {
               onNewChat={handleNewChat}
               onSelectConversation={handleSelectConversation}
               onOpenFileInPreview={handleOpenFileInPreview}
+              onExpand={() => setExpandedPanel("chat")}
             />
           )}
           {mobilePanel === "docs" && (
@@ -419,6 +481,9 @@ export default function RepoPage({ params }: PageProps) {
                 repoId={repoId}
                 mode={previewMode}
                 onModeChange={setPreviewMode}
+                onExpand={(panel) => setExpandedPanel(panel)}
+                architectureGraphRef={architectureGraphRef}
+                onReactFlowInstance={handleReactFlowInstance}
               />
             </div>
           )}
@@ -429,25 +494,19 @@ export default function RepoPage({ params }: PageProps) {
         <RepoResizableLayout
           defaultLeftPercent={35}
           left={
-            isHydrated ? (
-              <RepoChat
-                messages={displayMessages}
-                onSendMessage={handleSendMessage}
-                isAnalyzing={isAnalyzing}
-                isThinking={isThinking}
-                isStreaming={isStreaming}
-                streamingContent={streamingContent}
-                conversations={chatConvs}
-                activeConversationId={activeConversationId}
-                onNewChat={handleNewChat}
-                onSelectConversation={handleSelectConversation}
-                onOpenFileInPreview={handleOpenFileInPreview}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center p-4">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              </div>
-            )
+            <RepoChat
+              messages={displayMessages}
+              onSendMessage={handleSendMessage}
+              isAnalyzing={isAnalyzing}
+              isThinking={isThinking}
+              streamingContent={streamingContent}
+              conversations={conversations}
+              activeConversationId={activeConversationId}
+              onNewChat={handleNewChat}
+              onSelectConversation={handleSelectConversation}
+              onOpenFileInPreview={handleOpenFileInPreview}
+              onExpand={() => setExpandedPanel("chat")}
+            />
           }
           right={
             <div className="h-full min-h-0 min-w-0 overflow-hidden">
@@ -463,6 +522,9 @@ export default function RepoPage({ params }: PageProps) {
                 repoId={repoId}
                 mode={previewMode}
                 onModeChange={setPreviewMode}
+                onExpand={(panel) => setExpandedPanel(panel)}
+                architectureGraphRef={architectureGraphRef}
+                onReactFlowInstance={handleReactFlowInstance}
               />
             </div>
           }
@@ -472,8 +534,118 @@ export default function RepoPage({ params }: PageProps) {
         open={shareOpen}
         onOpenChange={setShareOpen}
         repoName={fullName}
+        shareMode={shareMode}
         shareContent={shareContent}
+        architectureGraphRef={previewMode === "architecture" ? architectureGraphRef : undefined}
+        reactFlowInstanceRef={reactFlowInstanceRef}
       />
+
+      {/* Expanded panel overlays */}
+      <ExpandedPanelOverlay
+        open={expandedPanel === "chat"}
+        onClose={() => setExpandedPanel(null)}
+        title="AI Chat"
+      >
+        <div className="h-full overflow-hidden">
+          <RepoChat
+            messages={displayMessages}
+            onSendMessage={handleSendMessage}
+            isAnalyzing={isAnalyzing}
+            isThinking={isThinking}
+            streamingContent={streamingContent}
+            conversations={conversations}
+            activeConversationId={activeConversationId}
+            onNewChat={handleNewChat}
+            onSelectConversation={handleSelectConversation}
+            onOpenFileInPreview={handleOpenFileInPreview}
+          />
+        </div>
+      </ExpandedPanelOverlay>
+
+      <ExpandedPanelOverlay
+        open={expandedPanel === "docs"}
+        onClose={() => setExpandedPanel(null)}
+        title="Documentation"
+      >
+        <ExpandedDocsView content={docsContent} />
+      </ExpandedPanelOverlay>
+
+      <ExpandedPanelOverlay
+        open={expandedPanel === "architecture"}
+        onClose={() => setExpandedPanel(null)}
+        title="Architecture"
+      >
+        <div className="h-full overflow-hidden p-4">
+          <RepoArchitectureGraph files={files} dependencies={repo.dependencies ?? []} className="h-full w-full" />
+        </div>
+      </ExpandedPanelOverlay>
+
+      <ExpandedPanelOverlay
+        open={expandedPanel === "architecture-notes"}
+        onClose={() => setExpandedPanel(null)}
+        title="Architecture Notes"
+      >
+        <div className="flex h-full flex-col overflow-hidden">
+          {repo.architecture && repo.architecture.trim() ? (
+            <div className="notion-architecture-notes min-h-0 flex-1 overflow-y-auto dashboard-content-scroll">
+              <div className="notion-notes-header">
+                <div className="notion-notes-title">
+                  <span className="notion-notes-title-icon">
+                    <FileEdit className="h-4 w-4" />
+                  </span>
+                  Architecture Notes
+                </div>
+              </div>
+              <div className="notion-notes-content">
+                <div className="notion-prose">
+                  <ArchitectureNotesMarkdown content={repo.architecture} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="notion-architecture-notes flex min-h-0 flex-1 flex-col">
+              <div className="notion-notes-header">
+                <div className="notion-notes-title">
+                  <span className="notion-notes-title-icon">
+                    <FileEdit className="h-4 w-4" />
+                  </span>
+                  Architecture Notes
+                </div>
+              </div>
+              <div className="notion-empty-state">
+                <div className="notion-empty-state-icon">
+                  <FileEdit className="h-6 w-6" />
+                </div>
+                <p className="notion-empty-state-title">No notes yet</p>
+                <p className="notion-empty-state-desc">Run analysis on this repository to generate AI-powered architecture notes.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </ExpandedPanelOverlay>
+
+      <ExpandedPanelOverlay
+        open={expandedPanel === "files"}
+        onClose={() => setExpandedPanel(null)}
+        title="Files"
+      >
+        <RepoFilePreview
+          files={files}
+          selectedPath={selectedFilePath}
+          onSelectFile={setSelectedFilePath}
+          workspaceId={selectedWorkspaceId}
+          repoId={repoId}
+          className="h-full"
+        />
+      </ExpandedPanelOverlay>
+
+      <ExpandedPanelOverlay
+        open={expandedPanel === "insights"}
+        onClose={() => setExpandedPanel(null)}
+        title="Insights"
+      >
+        <RepoInsights files={files} className="h-full" />
+      </ExpandedPanelOverlay>
     </div>
   );
 }

@@ -1,24 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Copy, FileDown, FileText, Linkedin, BookOpen, Share2 } from "lucide-react";
+import { Copy, FileDown, FileText, Linkedin, BookOpen, Share2, Image, PenTool, FileCode } from "lucide-react";
 import { cn } from "@/lib/utils";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+import { marked } from "marked";
+import {
+  exportReactFlowPNG,
+  exportReactFlowSVG,
+  exportReactFlowExcalidraw,
+} from "@/lib/graph-export";
+
+export type ShareMode = "docs" | "architecture" | "architecture-notes";
 
 type RepoShareDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoName: string;
+  shareMode: ShareMode;
   shareContent?: string;
   shareUrl?: string;
+  /** Ref to architecture graph container for PNG export. Only used when shareMode is "architecture". */
+  architectureGraphRef?: React.RefObject<HTMLDivElement | null>;
+  /** Ref to ReactFlow instance for fitView and Excalidraw export. */
+  reactFlowInstanceRef?: React.RefObject<{
+    fitView: (opts?: { padding?: number; duration?: number }) => boolean;
+    getNodes: () => { id: string; position: { x: number; y: number }; width?: number; height?: number; data?: { label?: string } }[];
+    getEdges: () => { id: string; source: string; target: string }[];
+  } | null>;
   className?: string;
 };
 
-const OPTIONS = [
+const TEXT_OPTIONS = [
   { id: "link", label: "Copy link", icon: Copy },
   { id: "markdown", label: "Export markdown", icon: FileDown },
   { id: "pdf", label: "Export PDF", icon: FileText },
@@ -27,76 +46,289 @@ const OPTIONS = [
   { id: "twitter", label: "Post to X (Twitter)", icon: Share2 },
 ] as const;
 
+function escapeHtml(text: string): string {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function applyPdfStyles(html: string): string {
+  return html
+    .replaceAll("<h1", '<h1 style="margin:28px 0 14px;font-size:20pt;font-weight:700;color:#0a0a0a;page-break-after:avoid;"')
+    .replaceAll("<h2", '<h2 style="margin:24px 0 12px;font-size:16pt;font-weight:600;color:#0a0a0a;page-break-after:avoid;"')
+    .replaceAll("<h3", '<h3 style="margin:20px 0 10px;font-size:13pt;font-weight:600;color:#0a0a0a;page-break-after:avoid;"')
+    .replaceAll("<p", '<p style="margin:0 0 12px;font-size:11pt;line-height:1.7;color:#262626;"')
+    .replaceAll("<ul", '<ul style="margin:0 0 12px;padding-left:28px;font-size:11pt;"')
+    .replaceAll("<ol", '<ol style="margin:0 0 12px;padding-left:28px;font-size:11pt;"')
+    .replaceAll("<li", '<li style="margin-bottom:6px;line-height:1.6;color:#262626;"')
+    .replaceAll("<blockquote", '<blockquote style="margin:14px 0;padding:12px 16px;border-left:4px solid #0a0a0a;background:#f8f8f8;color:#404040;font-size:11pt;page-break-inside:avoid;"')
+    .replaceAll("<code", '<code style="padding:2px 6px;font-size:10pt;font-family:Consolas,monospace;background:#f0f0f0;border-radius:4px;color:#0a0a0a;"')
+    .replaceAll("<pre", '<pre style="margin:14px 0;padding:16px;font-size:9.5pt;font-family:Consolas,monospace;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;overflow-x:auto;color:#0a0a0a;page-break-inside:avoid;"')
+    .replaceAll("<table", '<table style="width:100%;margin:14px 0;border-collapse:collapse;font-size:10.5pt;page-break-inside:avoid;"')
+    .replaceAll("<th", '<th style="padding:12px 14px;border:1px solid #d0d0d0;text-align:left;font-weight:600;background:#e8e8e8;color:#0a0a0a;vertical-align:top;"')
+    .replaceAll("<td", '<td style="padding:12px 14px;border:1px solid #e0e0e0;color:#262626;vertical-align:top;word-wrap:break-word;word-break:break-word;"')
+    .replaceAll("<hr", '<hr style="margin:20px 0;border:none;border-top:1px solid #e0e0e0;"')
+    .replaceAll("<a ", '<a style="color:#0a0a0a;text-decoration:underline;" ');
+}
+
+const ARCHITECTURE_OPTIONS = [
+  { id: "png", label: "Export PNG", icon: Image },
+  { id: "svg", label: "Export SVG", icon: FileCode },
+  { id: "excalidraw", label: "Export Excalidraw", icon: PenTool },
+  { id: "link", label: "Copy link", icon: Copy },
+  { id: "linkedin", label: "Share to LinkedIn", icon: Linkedin },
+  { id: "twitter", label: "Share to X", icon: Share2 },
+  { id: "medium", label: "Share to Medium", icon: BookOpen },
+] as const;
+
 export function RepoShareDialog({
   open,
   onOpenChange,
   repoName,
+  shareMode,
   shareContent = "",
   shareUrl = typeof window !== "undefined" ? window.location.href : "",
+  architectureGraphRef,
+  reactFlowInstanceRef,
   className,
 }: RepoShareDialogProps) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
 
-  const handleCopyLink = async () => {
+  const safeRepoName = repoName.replace(/\//g, "-");
+  const isTextMode = shareMode === "docs" || shareMode === "architecture-notes";
+
+  const handleCopyLink = useCallback(async () => {
     await navigator.clipboard.writeText(shareUrl);
     setCopied("link");
     setTimeout(() => setCopied(null), 2000);
-  };
+  }, [shareUrl]);
 
-  const handleExportMarkdown = () => {
-    const blob = new Blob([shareContent || `# ${repoName}\n\nGenerated by RepoLens AI.`], {
-      type: "text/markdown",
-    });
+  const handleExportMarkdown = useCallback(() => {
+    const content = shareContent || `# ${repoName}\n\nGenerated by RepoLens AI.`;
+    const suffix = shareMode === "docs" ? "docs" : "notes";
+    const blob = new Blob([content], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${repoName.replace(/\//g, "-")}-repolens.md`;
+    a.download = `${safeRepoName}-${suffix}.md`;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [shareContent, repoName, shareMode, safeRepoName]);
+
+  const handleExportPDF = useCallback(async () => {
+    if (!shareContent.trim()) return;
+    setExporting("pdf");
+    let iframe: HTMLIFrameElement | null = null;
+    try {
+      const html = await marked.parse(shareContent, { async: true });
+      const title = shareMode === "docs" ? "Documentation" : "Architecture Notes";
+      const fullHtml = `
+        <!DOCTYPE html><html><head><meta charset="utf-8"><style>
+          *{box-sizing:border-box;margin:0;padding:0}
+          body{width:595px;padding:40px 50px;background:#fff;color:#1a1a1a;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:11pt;line-height:1.65}
+        </style></head><body>
+        <div style="width:100%">
+          <div style="border-bottom:2px solid #0a0a0a;padding-bottom:16px;margin-bottom:28px">
+            <h1 style="margin:0;font-size:24pt;font-weight:700;letter-spacing:-0.02em;color:#0a0a0a">${escapeHtml(repoName)}</h1>
+            <p style="margin:8px 0 0;font-size:11pt;color:#525252">${escapeHtml(title)} · Generated by RepoLens AI</p>
+          </div>
+          <div style="font-size:11pt;line-height:1.7;color:#262626">${applyPdfStyles(html)}</div>
+        </div>
+        </body></html>
+      `;
+      iframe = document.createElement("iframe");
+      iframe.style.cssText =
+        "position:fixed;top:0;left:0;width:595px;height:2000px;border:none;z-index:-1;pointer-events:none;";
+      document.body.appendChild(iframe);
+      const doc = iframe.contentDocument;
+      if (!doc) throw new Error("Iframe not ready");
+      doc.open();
+      doc.write(fullHtml);
+      doc.close();
+      await new Promise((r) => setTimeout(r, 150));
+      const bodyEl = doc.body;
+      if (!bodyEl) throw new Error("Iframe body not ready");
+      const canvas = await html2canvas(bodyEl, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      const marginTop = 18;
+      const marginBottom = 18;
+      const marginLeft = 15;
+      const marginRight = 15;
+      const contentW = pdfW - marginLeft - marginRight;
+      const contentH = pdfH - marginTop - marginBottom;
+      const imgH = (canvas.height * contentW) / canvas.width;
+      const totalPages = Math.ceil(imgH / contentH);
+      const contentHpx = (contentH / imgH) * canvas.height;
+      for (let i = 0; i < totalPages; i++) {
+        if (i > 0) pdf.addPage();
+        const srcY = i * contentHpx;
+        const sliceH = Math.min(contentHpx, canvas.height - srcY);
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+        const ctx = pageCanvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+          ctx.drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        }
+        const pageImgData = pageCanvas.toDataURL("image/jpeg", 0.95);
+        const pageImgH = (sliceH * contentW) / canvas.width;
+        pdf.addImage(pageImgData, "JPEG", marginLeft, marginTop, contentW, pageImgH);
+      }
+      pdf.save(`${safeRepoName}-${shareMode === "docs" ? "docs" : "notes"}.pdf`);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+    } finally {
+      iframe?.parentNode?.removeChild(iframe);
+      setExporting(null);
+    }
+  }, [shareContent, repoName, shareMode, safeRepoName]);
+
+  const handleExportPNG = useCallback(async () => {
+    const instance = reactFlowInstanceRef?.current;
+    if (!instance || !architectureGraphRef?.current) return;
+    setExporting("png");
+    try {
+      await exportReactFlowPNG(
+        instance,
+        architectureGraphRef.current,
+        `${safeRepoName}-architecture`,
+        { backgroundColor: "transparent" }
+      );
+    } catch (err) {
+      console.error("PNG export failed:", err);
+    } finally {
+      setExporting(null);
+    }
+  }, [architectureGraphRef, reactFlowInstanceRef, safeRepoName]);
+
+  const handleExportSVG = useCallback(async () => {
+    const instance = reactFlowInstanceRef?.current;
+    if (!instance || !architectureGraphRef?.current) return;
+    setExporting("svg");
+    try {
+      await exportReactFlowSVG(
+        instance,
+        architectureGraphRef.current,
+        `${safeRepoName}-architecture`,
+        { backgroundColor: "#ffffff" }
+      );
+    } catch (err) {
+      console.error("SVG export failed:", err);
+    } finally {
+      setExporting(null);
+    }
+  }, [architectureGraphRef, reactFlowInstanceRef, safeRepoName]);
+
+  const handleExportExcalidraw = useCallback(() => {
+    const instance = reactFlowInstanceRef?.current;
+    if (!instance?.getNodes || !instance?.getEdges) return;
+    setExporting("excalidraw");
+    try {
+      exportReactFlowExcalidraw(instance, `${safeRepoName}-architecture`);
+    } catch (err) {
+      console.error("Excalidraw export failed:", err);
+    } finally {
+      setExporting(null);
+    }
+  }, [reactFlowInstanceRef, safeRepoName]);
+
+  const getShareText = useCallback(() => {
+    const snippet = (shareContent || "Repository analysis").slice(0, 200);
+    return `${repoName} – ${snippet}${shareContent && shareContent.length > 200 ? "…" : ""}`;
+  }, [shareContent, repoName]);
+
+  const handleSocialShare = useCallback(
+    (platform: "linkedin" | "medium" | "twitter") => {
+      const text = encodeURIComponent(getShareText());
+      const url = encodeURIComponent(shareUrl);
+      let href = "";
+      if (platform === "linkedin") href = `https://www.linkedin.com/sharing/share-offsite/?url=${url}`;
+      else if (platform === "twitter") href = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
+      else if (platform === "medium") href = `https://medium.com/new?title=${encodeURIComponent(repoName)}&text=${text}`;
+      if (href) window.open(href, "_blank", "noopener,noreferrer,width=600,height=400");
+    },
+    [shareUrl, getShareText, repoName]
+  );
+
+  const handleOptionClick = useCallback(
+    (optId: string) => {
+      if (optId === "link") handleCopyLink();
+      else if (optId === "markdown") handleExportMarkdown();
+      else if (optId === "pdf") handleExportPDF();
+      else if (optId === "png") handleExportPNG();
+      else if (optId === "svg") handleExportSVG();
+      else if (optId === "excalidraw") handleExportExcalidraw();
+      else if (optId === "linkedin") handleSocialShare("linkedin");
+      else if (optId === "medium") handleSocialShare("medium");
+      else if (optId === "twitter") handleSocialShare("twitter");
+    },
+    [handleCopyLink, handleExportMarkdown, handleExportPDF, handleExportPNG, handleExportSVG, handleExportExcalidraw, handleSocialShare]
+  );
+
+  const options = isTextMode ? TEXT_OPTIONS : ARCHITECTURE_OPTIONS;
+  const previewText =
+    shareMode === "architecture"
+      ? "Architecture dependency graph"
+      : shareContent?.slice(0, 200) || "Repository overview and key modules.";
+  const previewLabel = shareMode === "docs" ? "Documentation" : shareMode === "architecture-notes" ? "Architecture Notes" : "Architecture Graph";
+  const previewSnippet = previewText.replace(/#{1,6}\s/g, "").replace(/\*\*/g, "").trim();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title="Share" className={cn("sm:max-w-md", className)}>
-        <div className="border-b border-border px-6 pt-6 pb-2">
+      <DialogContent title="Share" className={cn("sm:max-w-sm rounded-2xl overflow-hidden", className)}>
+        <div className="border-b border-border px-4 pt-4 pb-3">
           <DialogTitle className="text-lg font-semibold">Share</DialogTitle>
         </div>
-        <div className="space-y-4 px-6 pt-4 pb-6">
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
+        <div className="space-y-4 px-4 py-4">
+          <div className="rounded-xl border border-border bg-muted/30 p-3">
             <p className="text-xs font-medium text-muted-foreground">Preview</p>
-            <p className="mt-1 text-sm font-semibold text-foreground">RepoLens Analysis</p>
+            <p className="mt-1 text-sm font-semibold text-foreground">{previewLabel}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">{repoName}</p>
             <p className="mt-2 line-clamp-3 text-xs text-foreground/90">
-              {shareContent?.slice(0, 200) || "Repository overview and key modules."}
+              {previewSnippet}
               {shareContent && shareContent.length > 200 ? "…" : ""}
             </p>
           </div>
           <div className="space-y-2">
-            {OPTIONS.map((opt) => {
-            const Icon = opt.icon;
-            const isLink = opt.id === "link";
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => {
-                  if (opt.id === "link") handleCopyLink();
-                  if (opt.id === "markdown") handleExportMarkdown();
-                }}
-                className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/50"
-              >
-                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="flex-1">{opt.label}</span>
-                {isLink && copied === "link" && (
-                  <span className="text-xs text-primary">Copied</span>
-                )}
-              </button>
-            );
-          })}
+            {options.map((opt) => {
+              const Icon = opt.icon;
+              const isLink = opt.id === "link";
+              const isDisabled =
+                (opt.id === "png" && (!architectureGraphRef?.current || !reactFlowInstanceRef?.current)) ||
+                (opt.id === "svg" && (!architectureGraphRef?.current || !reactFlowInstanceRef?.current)) ||
+                (opt.id === "excalidraw" && !reactFlowInstanceRef?.current?.getNodes) ||
+                (opt.id === "pdf" && !shareContent?.trim()) ||
+                (opt.id === "markdown" && !shareContent?.trim() && isTextMode);
+              const isExporting = exporting === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={isDisabled || !!exporting}
+                  onClick={() => handleOptionClick(opt.id)}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="flex-1">{opt.label}</span>
+                  {isLink && copied === "link" && <span className="text-xs text-primary">Copied</span>}
+                  {isExporting && <span className="text-xs text-muted-foreground">Exporting…</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
-        <p className="px-6 pb-6 text-xs text-muted-foreground">
-          Share your repository insights. Generated by RepoLens AI.
+        <p className="border-t border-border px-4 py-3 text-center text-xs text-muted-foreground">
+          Generated by RepoLens AI
         </p>
       </DialogContent>
     </Dialog>

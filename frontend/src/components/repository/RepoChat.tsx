@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquarePlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { MessageSquarePlus, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { RepoMessages, type ChatMessage } from "./RepoMessages";
 import { RepoInput } from "./RepoInput";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ type RepoChatProps = {
   onCopyMessage?: (text: string) => void;
   onShareMessage?: (text: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
+  onExpand?: () => void;
   className?: string;
 };
 
@@ -43,6 +44,7 @@ export function RepoChat({
   onCopyMessage,
   onShareMessage,
   onRegenerateMessage,
+  onExpand,
   className,
 }: RepoChatProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -74,7 +76,7 @@ export function RepoChat({
         className
       )}
     >
-      <AnimatePresence initial={false}>
+      {/* <AnimatePresence initial={false}>
         {showSidebar && sidebarOpen && (
           <motion.div
             initial={{ width: 0, opacity: 0 }}
@@ -130,7 +132,7 @@ export function RepoChat({
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence> */}
       {showSidebar && !sidebarOpen && (
         <div className="hidden shrink-0 flex-col border-r border-border bg-muted/20 md:flex">
           <Button
@@ -152,17 +154,30 @@ export function RepoChat({
               Ask questions about this repository
             </p>
           </div>
-          {onNewChat && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onNewChat}
-              className="shrink-0 gap-1.5 md:hidden"
-            >
-              <MessageSquarePlus className="h-3.5 w-3.5" />
-              New chat
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {onExpand && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onExpand}
+                aria-label="Expand chat"
+                className="h-8 w-8 shrink-0"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+            )}
+            {onNewChat && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onNewChat}
+                className="shrink-0 gap-1.5 md:hidden"
+              >
+                <MessageSquarePlus className="h-3.5 w-3.5" />
+                New chat
+              </Button>
+            )}
+          </div>
         </div>
 
         {isAnalyzing ? (

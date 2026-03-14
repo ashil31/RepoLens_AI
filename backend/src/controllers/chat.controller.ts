@@ -6,7 +6,7 @@ import { AppError } from "../utils/appError";
 export const chatWithRepoHandler = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
         const repoId = req.params.repoId as string;
-        const { message, history } = req.body;
+        const { message, history, messageId: clientMessageId } = req.body;
 
         if (!message) {
             return next(new AppError("Message is required", 400));
@@ -14,18 +14,19 @@ export const chatWithRepoHandler = catchAsync(
 
         console.log(`[ChatController] Initializing chat for repo: ${repoId}`);
 
+        const messageId = clientMessageId || `msg-${Date.now()}`;
+
+        // Set headers for SSE (before any async work so we can emit during processing)
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+
+        const emit = (event: object) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+
         try {
-            const { stream, sources } = await ChatService.processChat(repoId, message, history || []);
+            const { stream } = await ChatService.processChat(repoId, message, history || [], messageId, emit);
 
-            // Set headers for SSE
-            res.setHeader("Content-Type", "text/event-stream");
-            res.setHeader("Cache-Control", "no-cache");
-            res.setHeader("Connection", "keep-alive");
-
-            // 1. Send sources first
-            res.write(`data: ${JSON.stringify({ type: "sources", data: sources })}\n\n`);
-
-            // 2. Stream the answer chunks
+            // Stream the answer chunks
             const reader = stream.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
@@ -52,7 +53,7 @@ export const chatWithRepoHandler = catchAsync(
                         const parsed = JSON.parse(data);
                         const content = parsed.choices?.[0]?.delta?.content || "";
                         if (content) {
-                            res.write(`data: ${JSON.stringify({ type: "content", data: content })}\n\n`);
+                            res.write(`data: ${JSON.stringify({ id: messageId, type: "content", data: content })}\n\n`);
                         }
                     } catch (e) {
                         // Ignore parse errors for partial lines
@@ -60,11 +61,13 @@ export const chatWithRepoHandler = catchAsync(
                 }
             }
 
+            emit({ id: messageId, type: "step", step: "generating", status: "done" });
+            emit({ id: messageId, type: "done" });
             res.end();
             console.log(`[ChatController] Chat stream completed for repo: ${repoId}`);
         } catch (error: any) {
             console.error(`[ChatController] Error:`, error.message);
-            res.write(`data: ${JSON.stringify({ type: "error", data: error.message })}\n\n`);
+            res.write(`data: ${JSON.stringify({ id: messageId, type: "error", data: error.message })}\n\n`);
             res.end();
         }
     }

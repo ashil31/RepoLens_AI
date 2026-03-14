@@ -61,7 +61,7 @@ export function RepoInsights({ files, className }: RepoInsightsProps) {
   return (
     <div
       className={cn(
-        "h-full overflow-y-auto p-4 dashboard-content-scroll",
+        "h-full min-h-0 overflow-y-auto p-4 dashboard-content-scroll",
         className
       )}
     >

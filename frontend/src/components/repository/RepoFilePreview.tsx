@@ -196,7 +196,7 @@ export function RepoFilePreview({
         <div className="shrink-0 border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground lg:border-b-0">
           Files ({fileList.length})
         </div>
-        <div className="max-h-40 min-h-0 flex-1 overflow-y-auto p-2 dashboard-content-scroll lg:max-h-none">
+        <div className="max-h-48 min-h-0 flex-1 overflow-y-auto p-2 dashboard-content-scroll lg:max-h-none">
           <FileTree
             node={tree}
             depth={0}

@@ -12,6 +12,8 @@ type RepoHeaderProps = {
   onShare?: () => void;
   onExport?: () => void;
   backHref?: string;
+  /** When true, Share button is visible. Only show for Docs, Architecture, Notes tabs. */
+  canShare?: boolean;
   /** When set, shows "Analyzing repository..." with progress steps */
   status?: "analyzing";
   className?: string;
@@ -22,6 +24,7 @@ export function RepoHeader({
   onShare,
   onExport,
   backHref = "/dashboard/repositories",
+  canShare = true,
   status,
   className,
 }: RepoHeaderProps) {
@@ -81,18 +84,18 @@ export function RepoHeader({
             </Button>
           </a>
         )}
-        {onShare && (
+        {canShare && onShare && (
           <Button variant="outline" size="sm" onClick={onShare} className="h-8 gap-1 px-2 sm:gap-1.5 sm:px-3">
             <Share2 className="h-3.5 w-3.5 shrink-0" />
             <span className="hidden sm:inline">Share</span>
           </Button>
         )}
-        {onExport && (
+        {/* {onExport && (
           <Button variant="outline" size="sm" onClick={onExport} className="h-8 gap-1 px-2 sm:gap-1.5 sm:px-3">
             <Download className="h-3.5 w-3.5 shrink-0" />
             <span className="hidden sm:inline">Export</span>
           </Button>
-        )}
+        )} */}
       </div>
     </motion.header>
   );
