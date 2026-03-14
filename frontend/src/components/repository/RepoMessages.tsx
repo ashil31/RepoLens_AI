@@ -42,6 +42,11 @@ function extractFilePaths(text: string): string[] {
   return out;
 }
 
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+
 function MessageContent({
   content,
   role,
@@ -51,31 +56,75 @@ function MessageContent({
   role: MessageRole;
   onFileClick?: (path: string) => void;
 }) {
-  if (!onFileClick) {
-    return <div className="whitespace-pre-wrap wrap-break-word">{content}</div>;
-  }
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  const re = new RegExp(FILE_PATH_REGEX.source, "g");
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    const before = content.slice(lastIndex, m.index);
-    const path = m[1].trim();
-    if (before) parts.push(before);
-    parts.push(
-      <button
-        key={m.index}
-        type="button"
-        onClick={() => onFileClick(path)}
-        className="inline-flex items-center rounded-md bg-muted px-2 py-1 font-mono text-xs text-foreground hover:bg-muted/80"
+  const renderTextWithFiles = (text: string) => {
+    if (!onFileClick) return text;
+
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    const re = new RegExp(FILE_PATH_REGEX.source, "g");
+    let m: RegExpExecArray | null;
+
+    while ((m = re.exec(text)) !== null) {
+      const before = text.slice(lastIndex, m.index);
+      const path = m[1].trim();
+      if (before) parts.push(before);
+      parts.push(
+        <button
+          key={`${m.index}-${path}`}
+          type="button"
+          onClick={() => onFileClick(path)}
+          className="inline-flex items-center rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-foreground hover:bg-muted/80 transition-colors border border-border/30 mx-0.5 align-baseline"
+        >
+          {path}
+        </button>
+      );
+      lastIndex = m.index + m[0].length;
+    }
+
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    return parts.length ? parts : text;
+  };
+
+  return (
+    <div className={cn(
+      "markdown-content wrap-break-word",
+      role === "user" ? "text-background" : "text-foreground"
+    )}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ node, inline, className, children, ...props }: any) {
+            const match = /language-(\w+)/.exec(className || "");
+            return !inline && match ? (
+              <div className="my-3 overflow-hidden rounded-lg border border-border/50 bg-black/20">
+                <div className="flex items-center justify-between bg-muted/40 px-4 py-1.5 text-[10px] font-medium text-muted-foreground border-b border-border/30">
+                  <span>{match[1].toUpperCase()}</span>
+                </div>
+                <SyntaxHighlighter
+                  style={vscDarkPlus as any}
+                  language={match[1]}
+                  PreTag="div"
+                  className="!m-0 !bg-transparent !p-4 !text-xs dashboard-content-scroll"
+                  {...props}
+                >
+                  {String(children).replace(/\n$/, "")}
+                </SyntaxHighlighter>
+              </div>
+            ) : (
+              <code className={cn("rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs", className)} {...props}>
+                {children}
+              </code>
+            );
+          },
+          p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{Array.isArray(children) ? children.map(c => typeof c === 'string' ? renderTextWithFiles(c) : c) : (typeof children === 'string' ? renderTextWithFiles(children) : children)}</p>,
+          li: ({ children }) => <li className="mb-1">{Array.isArray(children) ? children.map(c => typeof c === 'string' ? renderTextWithFiles(c) : c) : (typeof children === 'string' ? renderTextWithFiles(children) : children)}</li>,
+          a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{children}</a>,
+        }}
       >
-        {path}
-      </button>
-    );
-    lastIndex = m.index + m[0].length;
-  }
-  if (lastIndex < content.length) parts.push(content.slice(lastIndex));
-  return <div className="whitespace-pre-wrap wrap-break-word">{parts.length ? parts : content}</div>;
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 export function RepoMessages({
@@ -117,9 +166,9 @@ export function RepoMessages({
             <div className="mb-1 text-xs font-medium text-muted-foreground">
               RepoLens
             </div>
-            <div className="whitespace-pre-wrap wrap-break-word">
-              {streamingContent}
-              <span className="animate-pulse" aria-hidden>|</span>
+            <div className="relative">
+              <MessageContent content={streamingContent} role="assistant" onFileClick={onFileClick} />
+              <span className="absolute bottom-0 inline-block h-4 w-1 animate-pulse bg-primary ml-1" aria-hidden />
             </div>
           </div>
         </motion.div>

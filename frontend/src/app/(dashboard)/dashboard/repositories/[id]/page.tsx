@@ -9,10 +9,15 @@ import {
   RepoShareDialog,
   RepoResizableLayout,
   type ChatMessage,
+  type ConversationItem,
 } from "@/components/repository";
 import { AnalysisStepLoader } from "@/components/ui/multi-step-loader";
 import { Button } from "@/components/ui/button";
-import { useAppStore } from "@/store";
+import {
+  useAppStore,
+  useAuthStore,
+  useChatStore,
+} from "@/store";
 import { useRepository, useAnalysisJob } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
@@ -101,17 +106,25 @@ export default function RepoPage({ params }: PageProps) {
     }
   }, [jobStatus, selectedWorkspaceId, repoId, queryClient, refetchRepo]);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [conversations, setConversations] = useState<{ id: string; title: string; messages: ChatMessage[] }[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  const chatConvsMap = useChatStore((s) => s.conversations);
+  const chatConvs = useMemo(() => chatConvsMap[repoId] || [], [chatConvsMap, repoId]);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const setActiveConversationId = useChatStore((s) => s.setActiveConversationId);
+  const addConversation = useChatStore((s) => s.addConversation);
+  const updateConversation = useChatStore((s) => s.updateConversation);
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<"docs" | "files" | "architecture" | "insights">("docs");
   const [mobilePanel, setMobilePanel] = useState<"chat" | "docs">("chat");
   const [isAnalyzing] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const replyingToConvIdRef = useRef<string | null>(null);
 
   const repoCommandAction = useAppStore((s) => s.repoCommandAction);
   const setRepoCommandAction = useAppStore((s) => s.setRepoCommandAction);
@@ -130,8 +143,8 @@ export default function RepoPage({ params }: PageProps) {
     });
   }, [repoCommandAction, setRepoCommandAction, requestFocusChat]);
 
-  const activeConversation = conversations.find((c) => c.id === activeConversationId);
-  const displayMessages = activeConversation ? activeConversation.messages : messages;
+  const activeConversation = chatConvs.find((c) => c.id === activeConversationId);
+  const displayMessages = activeConversation ? activeConversation.messages : [];
 
   const docContent = useMemo(() => (repo ? buildPlaceholderDoc(repo) : ""), [repo]);
   const files = repo?.files ?? [];
@@ -216,67 +229,123 @@ export default function RepoPage({ params }: PageProps) {
 
   const handleNewChat = () => {
     const id = `conv-${Date.now()}`;
-    setConversations((prev) => [{ id, title: "New chat", messages: [] }, ...prev]);
+    addConversation(repoId, { id, title: "New chat", messages: [] });
     setActiveConversationId(id);
-    setMessages([]);
   };
 
   const handleSelectConversation = (id: string) => {
     setActiveConversationId(id);
-    const conv = conversations.find((c) => c.id === id);
-    if (conv) setMessages(conv.messages);
   };
 
-  const handleSendMessage = (text: string) => {
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim()) return;
+
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       role: "user",
       content: text,
     };
     const nextMessages = [...displayMessages, userMsg];
-    setMessages(nextMessages);
 
     const newConvId = `conv-${Date.now()}`;
     const convIdToUse = activeConversationId || newConvId;
 
     if (activeConversationId) {
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === activeConversationId
-            ? { ...c, messages: nextMessages, title: c.title === "New chat" ? text.slice(0, 40) : c.title }
-            : c
-        )
-      );
+      updateConversation(repoId, activeConversationId, {
+        messages: nextMessages,
+        title: activeConversation?.title === "New chat" ? text.slice(0, 40) : activeConversation?.title,
+      });
     } else {
-      setConversations((prev) => [{ id: newConvId, title: text.slice(0, 40), messages: nextMessages }, ...prev]);
+      addConversation(repoId, { id: newConvId, title: text.slice(0, 40), messages: nextMessages });
       setActiveConversationId(newConvId);
     }
 
-    replyingToConvIdRef.current = convIdToUse;
     setIsThinking(true);
-    const fullReply = "Repository analysis is not connected yet. This will stream AI-generated answers with file references.";
-    let i = 0;
-    const interval = setInterval(() => {
-      i += 1 + Math.floor(Math.random() * 3);
-      if (i >= fullReply.length) {
-        clearInterval(interval);
-        setStreamingContent("");
-        setIsThinking(false);
-        const assistantMsg: ChatMessage = {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          content: fullReply,
-          files: ["src/auth/service.ts", "src/auth/controller.ts"],
-        };
-        setMessages((prev) => [...prev, assistantMsg]);
-        setConversations((prev) =>
-          prev.map((c) => (c.id === replyingToConvIdRef.current ? { ...c, messages: [...c.messages, assistantMsg] } : c))
-        );
-        replyingToConvIdRef.current = null;
-        return;
+    setStreamingContent("");
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+      const token = useAuthStore.getState().accessToken;
+
+      const res = await fetch(`${baseUrl}/workspaces/${selectedWorkspaceId}/repos/${repoId}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: text,
+          history: displayMessages.map((m: ChatMessage) => ({ role: m.role, content: m.content })).slice(-5)
+        })
+      });
+
+      if (!res.ok) throw new Error("Chat failed");
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedContent = "";
+      let detectedSources: string[] = [];
+
+      setIsThinking(false);
+
+      if (reader) {
+        setIsStreaming(true);
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith("data: ")) {
+              const dataStr = trimmed.slice(6).trim();
+              if (dataStr === "[DONE]") continue;
+
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.type === "sources") {
+                  detectedSources = parsed.data.map((s: any) => s.file);
+                } else if (parsed.type === "content") {
+                  accumulatedContent += parsed.data;
+                  setStreamingContent(accumulatedContent);
+                }
+              } catch (e) {
+                // Ignore partial JSON
+              }
+            }
+          }
+        }
       }
-      setStreamingContent(fullReply.slice(0, i));
-    }, 30);
+
+      const assistantMsg: ChatMessage = {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        content: accumulatedContent || "Sorry, I couldn't generate a response.",
+        files: detectedSources,
+      };
+
+      updateConversation(repoId, convIdToUse, {
+        messages: [...(activeConversation?.messages || nextMessages), assistantMsg],
+      });
+      setStreamingContent("");
+      setIsStreaming(false);
+    } catch (error) {
+      console.error("Chat error:", error);
+      setIsThinking(false);
+      setIsStreaming(false);
+      const errorMsg: ChatMessage = {
+        id: `e-${Date.now()}`,
+        role: "assistant",
+        content: "An error occurred while connecting to the AI. Please try again later.",
+      };
+      updateConversation(repoId, convIdToUse, {
+        messages: [...(activeConversation?.messages || nextMessages), errorMsg],
+      });
+    }
   };
 
   const handleOpenFileInPreview = (path: string) => {
@@ -321,14 +390,15 @@ export default function RepoPage({ params }: PageProps) {
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
-          {mobilePanel === "chat" && (
+          {isHydrated && mobilePanel === "chat" && (
             <RepoChat
               messages={displayMessages}
               onSendMessage={handleSendMessage}
               isAnalyzing={isAnalyzing}
               isThinking={isThinking}
+              isStreaming={isStreaming}
               streamingContent={streamingContent}
-              conversations={conversations}
+              conversations={chatConvs}
               activeConversationId={activeConversationId}
               onNewChat={handleNewChat}
               onSelectConversation={handleSelectConversation}
@@ -359,18 +429,25 @@ export default function RepoPage({ params }: PageProps) {
         <RepoResizableLayout
           defaultLeftPercent={35}
           left={
-            <RepoChat
-              messages={displayMessages}
-              onSendMessage={handleSendMessage}
-              isAnalyzing={isAnalyzing}
-              isThinking={isThinking}
-              streamingContent={streamingContent}
-              conversations={conversations}
-              activeConversationId={activeConversationId}
-              onNewChat={handleNewChat}
-              onSelectConversation={handleSelectConversation}
-              onOpenFileInPreview={handleOpenFileInPreview}
-            />
+            isHydrated ? (
+              <RepoChat
+                messages={displayMessages}
+                onSendMessage={handleSendMessage}
+                isAnalyzing={isAnalyzing}
+                isThinking={isThinking}
+                isStreaming={isStreaming}
+                streamingContent={streamingContent}
+                conversations={chatConvs}
+                activeConversationId={activeConversationId}
+                onNewChat={handleNewChat}
+                onSelectConversation={handleSelectConversation}
+                onOpenFileInPreview={handleOpenFileInPreview}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center p-4">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              </div>
+            )
           }
           right={
             <div className="h-full min-h-0 min-w-0 overflow-hidden">

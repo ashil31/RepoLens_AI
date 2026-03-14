@@ -52,3 +52,16 @@ export async function generateBatchedEmbeddings(chunks: string[]): Promise<numbe
     console.log(`[EmbeddingService] Successfully generated ${results.length} embeddings across all batches.`)
     return results
 }
+
+/**
+ * Generates a single embedding for a query string.
+ * @param query - The text query to embed
+ * @returns A single vector embedding (number[])
+ */
+export async function generateQueryEmbedding(query: string): Promise<number[]> {
+    const results = await generateBatchedEmbeddings([query])
+    if (!results.length) {
+        throw new Error("[EmbeddingService] Failed to generate query embedding.")
+    }
+    return results[0]
+}

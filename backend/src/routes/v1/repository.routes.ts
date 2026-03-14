@@ -11,6 +11,7 @@ import {
     getGitHubInstallationStatusHandler,
     disconnectGitHubHandler
 } from "../../controllers/repository.controller"
+import { chatWithRepoHandler } from "../../controllers/chat.controller"
 
 const router = Router({ mergeParams: true })
 
@@ -24,6 +25,7 @@ router.delete("/github/installation", disconnectGitHubHandler)
 
 // Repositories (workspace repos)
 router.post("/add", addRepositoryHandler)
+router.post("/:repoId/chat", chatWithRepoHandler)
 router.get("/", getWorkspaceRepositoriesHandler)
 router.get("/:repoId/files/:fileId", getRepositoryFileContentHandler)
 router.get("/:repoId", getRepositoryDetailsHandler)
