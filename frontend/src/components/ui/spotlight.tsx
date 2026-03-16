@@ -33,13 +33,12 @@ export function Spotlight({
       transition={{ duration: 1.2 }}
       className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-hidden"
     >
-      {/* Mobile: subtle static center glow only — no sweeping beams */}
       <div
-        className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_40%,hsla(0,0%,100%,0.06),transparent_70%)] md:hidden"
+        className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_40%,hsla(0,0%,100%,0.06),transparent_70%)]"
         aria-hidden
       />
-      {/* Desktop: full sweeping beams — hidden on mobile */}
-      <div className="hidden md:block">
+      {/* Sweeping beams – now visible on all breakpoints */}
+      <div className="block">
       <motion.div
         animate={{ x: [0, xOffset, 0] }}
         transition={{ duration, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}

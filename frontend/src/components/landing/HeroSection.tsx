@@ -326,7 +326,7 @@ export function HeroSection() {
       {/* ── Noise background — absolute, sits behind everything at z-0 ── */}
       {/* <NoiseBackground /> */}
       <Spotlight />
-      <div className="container relative mx-auto flex w-full flex-1 flex-col items-center justify-center overflow-hidden px-4 py-8 sm:py-12 md:py-20">
+      <div className="container relative mx-auto flex w-full flex-1 flex-col items-center justify-center overflow-hidden px-4 py-12 sm:py-16 md:py-20 min-h-[70vh] sm:min-h-[75vh] md:min-h-[80vh]">
         <div className="relative z-10 flex flex-col items-center justify-center gap-6 sm:gap-8 md:gap-10">
           <motion.div
             initial={{ opacity: 0, y: 12 }}

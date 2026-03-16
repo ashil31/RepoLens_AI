@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, useMotionValue, useTransform, animate } from "framer-motion";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { motion, useMotionValue, useTransform, animate, useSpring } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 const FIGURES = [
@@ -707,57 +707,117 @@ export function FigBlocks() {
 }
 
 
-// ─── FigRays — OrbitingCircles with CompanyMarquee logos ──────────────────────
-//
-//  Uses OrbitingCircles with logos from CompanyMarquee (hero-dark color scheme).
-//  Icons orbit like the Magic UI demo. Change sizes below to adjust icon dimensions.
-//
-import { OrbitingCircles } from "@/components/ui/orbiting-circles";
-import {
-  GitHubLogo,
-  VercelLogo,
-  OpenAILogo,
-  DigitalOceanLogo,
-  PostgreSQLLogo,
-  AwsEc2Logo,
-} from "@/components/landing/CompanyMarquee";
 
-/** Icon sizes in px — change these to resize logos on each orbit */
-const OUTER_ICON_SIZE = 36;
-const INNER_ICON_SIZE = 24;
+const NUM_LAYERS = 16;
+const SIGMA = 2.2;
+const VARIANCE = 2 * SIGMA * SIGMA;
 
 export function FigRays() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hoverIndex = useMotionValue(-20);
+
+  const smoothHoverIndex = useSpring(hoverIndex, {
+    stiffness: 250,
+    damping: 18,
+    mass: 0.6,
+  });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const normalizedX = Math.max(0, Math.min(1, x / rect.width));
+    hoverIndex.set(normalizedX * (NUM_LAYERS - 1));
+  };
+
+  const handleMouseLeave = () => {
+    // On exit, glide back to a calm fan on the left instead of snapping back
+    hoverIndex.set(10);
+  };
+
+  const layers = useMemo(() => Array.from({ length: NUM_LAYERS }), []);
+
   return (
-    <div className="relative h-full w-full min-h-[240px] overflow-hidden">
-      <div className="absolute inset-0">
-        <OrbitingCircles
-        iconSize={OUTER_ICON_SIZE}
-        radius={100}
-        className="text-white/70"
+    <div
+      ref={containerRef}
+      className="relative flex h-full w-full items-center justify-center overflow-hidden"
+      style={{ perspective: "1200px" }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      <motion.div
+        className="relative flex h-[170px] w-[170px] items-center justify-center sm:h-[180px] sm:w-[180px] md:h-[200px] md:w-[200px] lg:h-[240px] lg:w-[240px]"
+        style={{
+          transformStyle: "preserve-3d",
+          rotateX: 55,
+          rotateZ: -45,
+        }}
       >
-        <GitHubLogo size={OUTER_ICON_SIZE} />
-        <VercelLogo size={OUTER_ICON_SIZE} />
-        <OpenAILogo size={OUTER_ICON_SIZE} />
-        <DigitalOceanLogo size={OUTER_ICON_SIZE} />
-        <PostgreSQLLogo size={OUTER_ICON_SIZE} />
-        <AwsEc2Logo size={OUTER_ICON_SIZE} />
-      </OrbitingCircles>
-      </div>
-      <div className="absolute inset-0">
-        <OrbitingCircles
-        iconSize={INNER_ICON_SIZE}
-        radius={55}
-        reverse
-        speed={2}
-        className="text-white/50"
-      >
-        <GitHubLogo size={INNER_ICON_SIZE} />
-        <VercelLogo size={INNER_ICON_SIZE} />
-        <OpenAILogo size={INNER_ICON_SIZE} />
-        <DigitalOceanLogo size={INNER_ICON_SIZE} />
-      </OrbitingCircles>
-      </div>
+        {layers.map((_, i) => (
+          <Layer key={i} index={i} smoothHoverIndex={smoothHoverIndex} />
+        ))}
+      </motion.div>
     </div>
   );
 }
- 
+
+function Layer({
+  index,
+  smoothHoverIndex,
+}: {
+  index: number;
+  smoothHoverIndex: any;
+}) {
+  const ripple = useTransform(smoothHoverIndex, (hoverIdx: number) => {
+    const dist = Math.abs(index - hoverIdx);
+    return Math.exp(-(dist * dist) / VARIANCE);
+  });
+
+  const height = useTransform(ripple, (r) => 80 + r * 80);
+
+  const y = useTransform(smoothHoverIndex, (hoverIdx: number) => {
+    let distanceToAnchor = 0;
+    // Anchor stack on the RIGHT and push layers progressively toward the LEFT.
+    // We sum gaps from the current layer outward to the left (index 0),
+    // so the motion direction is mirrored compared to the original.
+    for (let j = 0; j < index; j++) {
+      const dist = Math.abs(j - hoverIdx);
+      const r = Math.exp(-(dist * dist) / VARIANCE);
+      const gap = 4 + r * 20;
+      distanceToAnchor += gap;
+    }
+    return distanceToAnchor;
+  });
+
+  const borderTopColor = useTransform(
+    ripple,
+    (r) => `rgba(255, 255, 255, ${0.1 + r * 0.4})`
+  );
+  const borderLeftColor = useTransform(
+    ripple,
+    (r) => `rgba(255, 255, 255, ${0.1 + r * 0.4})`
+  );
+
+  return (
+    <motion.div
+      className="absolute border-x border-b border-white/10 will-change-transform"
+      style={{
+        width: "150px",
+        height,
+        y,
+        backgroundColor: "#0A0A0A",
+        borderTop: "4px solid",
+        borderTopColor,
+        borderLeftColor,
+        borderRadius: "8px",
+        transformOrigin: "bottom",
+        rotateX: -90,
+        zIndex: NUM_LAYERS - index,
+        left: "50%",
+        marginLeft: "-135px",
+        bottom: "50%",
+      }}
+    />
+  );
+}
+

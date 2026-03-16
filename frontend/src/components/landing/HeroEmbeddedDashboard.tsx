@@ -66,13 +66,16 @@ export function HeroEmbeddedDashboard() {
   return (
     <>
       {/* Mobile & tablet: compact preview card */}
-      <div className="lg:hidden">
+      <div className="lg:hidden w-full">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.15 }}
+          className="flex w-full justify-center px-2 pb-2"
         >
-          <HeroDashboardPreview />
+          <div className="w-full max-w-md">
+            <HeroDashboardPreview />
+          </div>
         </motion.div>
       </div>
 
