@@ -1,1 +1,1 @@
-export { api, setAuthTokenGetter, setOnRefreshSuccess, setOnRefreshFailure, ApiClientError } from "./client";
+export { api, setAuthTokenGetter, setOnRefreshSuccess, setOnRefreshFailure, tryRefreshToken, ApiClientError } from "./client";

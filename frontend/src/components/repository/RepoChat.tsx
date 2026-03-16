@@ -12,16 +12,14 @@ export type ConversationItem = { id: string; title: string; messages: ChatMessag
 
 type RepoChatProps = {
   messages: ChatMessage[];
-  isStreaming?: boolean;
-  streamingContent?: string;
   onSendMessage: (text: string) => void;
   isAnalyzing?: boolean;
-  isThinking?: boolean;
+  isPending?: boolean;
   conversations?: ConversationItem[];
   activeConversationId?: string | null;
   onNewChat?: () => void;
   onSelectConversation?: (id: string) => void;
-  onOpenFileInPreview?: (path: string) => void;
+  onOpenFileInPreview?: (path: string, startLine?: number) => void;
   onCopyMessage?: (text: string) => void;
   onShareMessage?: (text: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
@@ -31,11 +29,9 @@ type RepoChatProps = {
 
 export function RepoChat({
   messages,
-  isStreaming,
-  streamingContent,
   onSendMessage,
   isAnalyzing = false,
-  isThinking = false,
+  isPending = false,
   conversations = [],
   activeConversationId,
   onNewChat,
@@ -150,9 +146,11 @@ export function RepoChat({
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4 sm:py-2.5">
           <div>
             <h2 className="text-sm font-medium text-foreground">AI Chat</h2>
-            <p className="text-xs text-muted-foreground">
-              Ask questions about this repository
-            </p>
+            {messages.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Ask questions about this repository
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {onExpand && (
@@ -209,34 +207,8 @@ export function RepoChat({
           </div>
         ) : (
           <>
-            {isThinking && (
-              <div className="shrink-0 border-b border-border bg-muted/30 px-4 py-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  RepoLens is thinking…
-                </p>
-                <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <span className="text-primary">✔</span> scanning files
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-primary">✔</span> analyzing architecture
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <motion.span
-                      animate={{ opacity: [1, 0.4, 1] }}
-                      transition={{ repeat: Infinity, duration: 0.8 }}
-                    >
-                      ●
-                    </motion.span>{" "}
-                    generating insights
-                  </li>
-                </ul>
-              </div>
-            )}
             <RepoMessages
               messages={messages}
-              isStreaming={isStreaming}
-              streamingContent={streamingContent}
               onFileClick={onOpenFileInPreview}
               onCopy={onCopyMessage}
               onShare={onShareMessage}
@@ -244,7 +216,8 @@ export function RepoChat({
             />
             <RepoInput
               onSubmit={onSendMessage}
-              disabled={isStreaming || isThinking}
+              disabled={isPending}
+              showSuggestions={messages.length === 0}
             />
           </>
         )}

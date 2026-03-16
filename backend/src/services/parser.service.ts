@@ -71,6 +71,16 @@ function parseWithBabel(meta: FileMetadata, code: string): FileMetadata {
             ImportDeclaration(path) {
                 meta.imports.push(path.node.source.value)
             },
+            CallExpression(path) {
+                const callee = path.node.callee
+                if (
+                    callee.type === "Identifier" &&
+                    callee.name === "require" &&
+                    path.node.arguments[0]?.type === "StringLiteral"
+                ) {
+                    meta.imports.push((path.node.arguments[0] as any).value)
+                }
+            },
 
             ExportNamedDeclaration(path) {
                 if (path.node.declaration) {

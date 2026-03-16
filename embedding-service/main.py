@@ -2,20 +2,24 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from FlagEmbedding import FlagModel
 import typing
-import uvicorn
 import time
 
 app = FastAPI()
 
-# Load model once at startup
-print("Loading model BAAI/bge-base-en-v1.5...")
+# Load model once at startup (bge-small optimized for CPU, ~3x faster than bge-base)
+# Note: bge-small produces 384-dim embeddings (bge-base uses 768). Schema must use vector(384).
+print("Loading model BAAI/bge-small-en-v1.5...")
 
 model = FlagModel(
-    "BAAI/bge-base-en-v1.5",
+    "BAAI/bge-small-en-v1.5",
     use_fp16=False  # set True if using GPU
 )
 
 print("Model loaded successfully.")
+
+print("Warming model...")
+model.encode(["warmup"], batch_size=1)
+print("Model warm.")
 
 # Request schema
 class EmbedRequest(BaseModel):
@@ -78,10 +82,5 @@ def embed(request: EmbedRequest):
         )
 
 
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8001,
-        workers=1
-    )
+# Run from terminal (3 workers for embedding CPU utilization):
+#   uvicorn main:app --host 127.0.0.1 --port 8001 --workers 3

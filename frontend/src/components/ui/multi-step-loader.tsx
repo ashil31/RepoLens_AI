@@ -79,17 +79,16 @@ export function AnalysisStepLoader({
   loadingStates,
   currentStepIndex,
   loading = true,
-  repoName,
   backHref,
   inline = false,
 }: AnalysisStepLoaderProps) {
   const content = (
     <>
-      {repoName && (
+      {/* {repoName && (
         <p className="text-sm text-muted-foreground mb-4">
           Analyzing <span className="font-medium text-foreground">{repoName}</span>
         </p>
-      )}
+      )} */}
       <div className={inline ? "flex-1 min-h-0 relative" : "h-96 relative"}>
         <LoaderCore
           value={currentStepIndex}

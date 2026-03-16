@@ -23,16 +23,20 @@ export interface RepoLensLogoProps {
   fillContainer?: boolean;
   /** Stable ID for SVG gradients (avoids hydration mismatch). Pass when logo is in initial HTML (e.g. navbar). */
   id?: string;
+  /** When "light", uses fixed white/light colors (for dark backgrounds). Use on landing page navbar. */
+  variant?: "auto" | "light";
 }
 
 /**
  * RepoLens logo (folder + lens). Uses CSS variables from theme (--card, --muted, --accent, etc.)
  * so it adapts to light/dark/pure-light/classic-dark. Use one place, import from here.
+ * When variant="light", wraps in .repolens-logo-light (globals.css) to use light theme colors.
  */
-export function RepoLensLogo({ size = "md", className, fillContainer, id: idProp }: RepoLensLogoProps) {
+export function RepoLensLogo({ size = "md", className, fillContainer, id: idProp, variant = "auto" }: RepoLensLogoProps) {
   const generatedId = useId().replace(/:/g, "-");
   const id = idProp ?? generatedId;
   const px = sizeMap[size];
+  const useLightVariant = variant === "light"; // variant="light" uses .repolens-logo-light from globals.css
 
   const svgProps = fillContainer
     ? {
@@ -49,7 +53,7 @@ export function RepoLensLogo({ size = "md", className, fillContainer, id: idProp
       }
     : { width: px, height: px };
 
-  return (
+  const svg = (
     <svg
       {...svgProps}
       viewBox={VIEWBOX}
@@ -140,4 +144,13 @@ export function RepoLensLogo({ size = "md", className, fillContainer, id: idProp
       />
     </svg>
   );
+
+  if (useLightVariant) {
+    return (
+      <span className="repolens-logo-light inline-flex shrink-0 [&>svg]:shrink-0">
+        {svg}
+      </span>
+    );
+  }
+  return svg;
 }

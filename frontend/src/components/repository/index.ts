@@ -2,7 +2,7 @@ export { RepoHeader } from "./RepoHeader";
 export { RepoChat, type ConversationItem } from "./RepoChat";
 export { ExpandedPanelOverlay } from "./ExpandedPanelOverlay";
 export { ExpandedDocsView } from "./ExpandedDocsView";
-export { RepoMessages, type ChatMessage } from "./RepoMessages";
+export { RepoMessages, type ChatMessage, type ChatSourceRef } from "./RepoMessages";
 export { RepoInput } from "./RepoInput";
 export { RepoPreviewPanel } from "./RepoPreviewPanel";
 export { RepoMarkdownDoc } from "./RepoMarkdownDoc";

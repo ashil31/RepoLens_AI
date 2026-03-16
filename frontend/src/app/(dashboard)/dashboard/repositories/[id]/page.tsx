@@ -17,16 +17,11 @@ import {
   ArchitectureNotesMarkdown,
   RepoPageSkeleton,
   type ChatMessage,
-  type ConversationItem,
 } from "@/components/repository";
 import { AnalysisStepLoader } from "@/components/ui/multi-step-loader";
 import { Button } from "@/components/ui/button";
-import {
-  useAppStore,
-  useAuthStore,
-  useChatStore,
-} from "@/store";
-import { useRepository, useAnalysisJob } from "@/hooks/queries";
+import { useAppStore, useChatStore } from "@/store";
+import { useRepository, useAnalysisJob, useChatMutation } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import type { Repository } from "@/types/user";
@@ -149,9 +144,8 @@ export default function RepoPage({ params }: PageProps) {
     []
   );
   const [isAnalyzing] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingContent, setStreamingContent] = useState("");
+
+  const { sendMessage, isPending: isChatPending } = useChatMutation(selectedWorkspaceId, repoId);
 
   const repoCommandAction = useAppStore((s) => s.repoCommandAction);
   const setRepoCommandAction = useAppStore((s) => s.setRepoCommandAction);
@@ -273,117 +267,54 @@ export default function RepoPage({ params }: PageProps) {
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
 
+    const messageId = `msg-${Date.now()}`;
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       role: "user",
       content: text,
     };
-    const nextMessages = [...displayMessages, userMsg];
+    const placeholderMsg: ChatMessage = {
+      id: messageId,
+      role: "assistant",
+      content: "",
+      status: "streaming",
+      steps: [
+        { name: "Embedding query", status: "pending" },
+        { name: "Searching repository", status: "pending" },
+        { name: "Reading code", status: "pending" },
+        { name: "Analyzing architecture", status: "pending" },
+        { name: "Generating response", status: "pending" },
+      ],
+    };
+    const nextMessages = [...displayMessages, userMsg, placeholderMsg];
 
     const newConvId = `conv-${Date.now()}`;
-    const convIdToUse = activeConversationId || newConvId;
+    const convInThisRepo = chatConvs.find((c) => c.id === activeConversationId);
+    const convIdToUse = convInThisRepo ? activeConversationId! : newConvId;
 
-    if (activeConversationId) {
-      updateConversation(repoId, activeConversationId, {
+    if (convInThisRepo) {
+      updateConversation(repoId, activeConversationId!, {
         messages: nextMessages,
         title: activeConversation?.title === "New chat" ? text.slice(0, 40) : activeConversation?.title,
       });
     } else {
       addConversation(repoId, { id: newConvId, title: text.slice(0, 40), messages: nextMessages });
-      setActiveConversationId(newConvId);
     }
 
-    setIsThinking(true);
-    setStreamingContent("");
-
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
-      const token = useAuthStore.getState().accessToken;
-
-      const res = await fetch(`${baseUrl}/workspaces/${selectedWorkspaceId}/repos/${repoId}/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          message: text,
-          history: displayMessages.map((m: ChatMessage) => ({ role: m.role, content: m.content })).slice(-5)
-        })
-      });
-
-      if (!res.ok) throw new Error("Chat failed");
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedContent = "";
-      let detectedSources: string[] = [];
-
-      setIsThinking(false);
-
-      if (reader) {
-        setIsStreaming(true);
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith("data: ")) {
-              const dataStr = trimmed.slice(6).trim();
-              if (dataStr === "[DONE]") continue;
-
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (parsed.type === "sources") {
-                  detectedSources = parsed.data.map((s: any) => s.file);
-                } else if (parsed.type === "content") {
-                  accumulatedContent += parsed.data;
-                  setStreamingContent(accumulatedContent);
-                }
-              } catch (e) {
-                // Ignore partial JSON
-              }
-            }
-          }
-        }
-      }
-
-      const assistantMsg: ChatMessage = {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        content: accumulatedContent || "Sorry, I couldn't generate a response.",
-        files: detectedSources,
-      };
-
-      updateConversation(repoId, convIdToUse, {
-        messages: [...(activeConversation?.messages || nextMessages), assistantMsg],
-      });
-      setStreamingContent("");
-      setIsStreaming(false);
+      const history = displayMessages.map((m) => ({ role: m.role, content: m.content })).slice(-5);
+      await sendMessage(text, history, { convId: convIdToUse, messageId });
+      // Message is updated in-place via SSE events
     } catch (error) {
       console.error("Chat error:", error);
-      setIsThinking(false);
-      setIsStreaming(false);
-      const errorMsg: ChatMessage = {
-        id: `e-${Date.now()}`,
-        role: "assistant",
-        content: "An error occurred while connecting to the AI. Please try again later.",
-      };
-      updateConversation(repoId, convIdToUse, {
-        messages: [...(activeConversation?.messages || nextMessages), errorMsg],
-      });
+      // Placeholder was already updated with error status via SSE; no need to add another message
     }
   };
 
-  const handleOpenFileInPreview = (path: string) => {
+  const handleOpenFileInPreview = (path: string, _startLine?: number) => {
     setSelectedFilePath(path);
     setPreviewMode("files");
+    // TODO: use _startLine to scroll file preview to line when supported
   };
 
   const fullName = repo.fullName ?? (repo.owner ? `${repo.owner}/${repo.name}` : repo.name);
@@ -456,9 +387,7 @@ export default function RepoPage({ params }: PageProps) {
               messages={displayMessages}
               onSendMessage={handleSendMessage}
               isAnalyzing={isAnalyzing}
-              isThinking={isThinking}
-              isStreaming={isStreaming}
-              streamingContent={streamingContent}
+              isPending={isChatPending}
               conversations={chatConvs}
               activeConversationId={activeConversationId}
               onNewChat={handleNewChat}
@@ -498,9 +427,8 @@ export default function RepoPage({ params }: PageProps) {
               messages={displayMessages}
               onSendMessage={handleSendMessage}
               isAnalyzing={isAnalyzing}
-              isThinking={isThinking}
-              streamingContent={streamingContent}
-              conversations={conversations}
+              isPending={isChatPending}
+              conversations={chatConvs}
               activeConversationId={activeConversationId}
               onNewChat={handleNewChat}
               onSelectConversation={handleSelectConversation}
@@ -551,9 +479,8 @@ export default function RepoPage({ params }: PageProps) {
             messages={displayMessages}
             onSendMessage={handleSendMessage}
             isAnalyzing={isAnalyzing}
-            isThinking={isThinking}
-            streamingContent={streamingContent}
-            conversations={conversations}
+            isPending={isChatPending}
+            conversations={chatConvs}
             activeConversationId={activeConversationId}
             onNewChat={handleNewChat}
             onSelectConversation={handleSelectConversation}

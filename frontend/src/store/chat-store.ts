@@ -7,12 +7,13 @@ import { type ChatMessage, type ConversationItem } from "@/components/repository
 interface ChatState {
   conversations: Record<string, ConversationItem[]>; // Keyed by repoId
   activeConversationId: string | null;
-  
+
   // Actions
   setConversations: (repoId: string, convs: ConversationItem[]) => void;
   setActiveConversationId: (id: string | null) => void;
   addConversation: (repoId: string, conv: ConversationItem) => void;
   updateConversation: (repoId: string, convId: string, updates: Partial<ConversationItem>) => void;
+  updateMessage: (repoId: string, convId: string, messageId: string, updates: Partial<ChatMessage>) => void;
   clearHistory: (repoId: string) => void;
 }
 
@@ -36,7 +37,8 @@ export const useChatStore = create<ChatState>()(
             conversations: {
               ...state.conversations,
               [repoId]: [conv, ...repoConvs]
-            }
+            },
+            activeConversationId: conv.id
           };
         }),
 
@@ -47,6 +49,26 @@ export const useChatStore = create<ChatState>()(
             conversations: {
               ...state.conversations,
               [repoId]: repoConvs.map((c) => (c.id === convId ? { ...c, ...updates } : c))
+            }
+          };
+        }),
+
+      updateMessage: (repoId, convId, messageId, updates) =>
+        set((state) => {
+          const repoConvs = state.conversations[repoId] || [];
+          return {
+            conversations: {
+              ...state.conversations,
+              [repoId]: repoConvs.map((c) =>
+                c.id === convId
+                  ? {
+                      ...c,
+                      messages: c.messages.map((m) =>
+                        m.id === messageId ? { ...m, ...updates } : m
+                      )
+                    }
+                  : c
+              )
             }
           };
         }),

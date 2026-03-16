@@ -20,6 +20,7 @@ type RepoInputProps = {
   disabled?: boolean;
   placeholder?: string;
   className?: string;
+  showSuggestions?: boolean;
 };
 
 export function RepoInput({
@@ -27,6 +28,7 @@ export function RepoInput({
   disabled = false,
   placeholder = "Ask RepoLens about this repository...",
   className,
+  showSuggestions = true,
 }: RepoInputProps) {
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
@@ -55,9 +57,10 @@ export function RepoInput({
 
   return (
     <div className={cn("shrink-0 border-t border-border bg-card/50 p-4", className)}>
-      <div className="mb-3 flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Try asking:</span>
-        {SUGGESTIONS.map((s) => (
+      {showSuggestions && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Try asking:</span>
+          {SUGGESTIONS.map((s) => (
           <motion.button
             key={s}
             type="button"
@@ -72,7 +75,8 @@ export function RepoInput({
             {s}
           </motion.button>
         ))}
-      </div>
+        </div>
+      )}
       <div className="relative flex gap-2">
         <div className="relative min-w-0 flex-1">
           <Input

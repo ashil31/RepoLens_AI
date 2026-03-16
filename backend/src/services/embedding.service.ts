@@ -1,6 +1,32 @@
 import axios from "axios"
+import http from "http"
+import https from "https"
 
-const LOCAL_EMBEDDING_URL = "http://localhost:8001/embed"
+const axiosClient = axios.create({
+    baseURL: "https://repolens.ashilpatel.site",
+    timeout: 900000,   
+    httpAgent: new http.Agent({ keepAlive: true }),
+    httpsAgent: new https.Agent({ keepAlive: true })
+})
+
+const SUB_BATCH_SIZE = 32
+const CONCURRENCY_LIMIT = 3
+
+function normalizeEmbeddingResponse(raw: unknown): number[][] {
+    if (!Array.isArray(raw)) return []
+    const first = raw[0]
+    return Array.isArray(first) ? (raw as number[][]) : [raw as number[]]
+}
+
+async function embedWithRetry(chunks: string[], retries = 3): Promise<number[][]> {
+    try {
+        return await generateBatchedEmbeddingsInternal(chunks)
+    } catch (err) {
+        if (retries === 0) throw err
+        await new Promise((r) => setTimeout(r, 2000))
+        return embedWithRetry(chunks, retries - 1)
+    }
+}
 
 /**
  * Generates vector embeddings for a list of text chunks using local embedding service.
@@ -9,12 +35,12 @@ const LOCAL_EMBEDDING_URL = "http://localhost:8001/embed"
  */
 export async function generateBatchedEmbeddings(chunks: string[]): Promise<number[][]> {
     if (!chunks.length) return []
+    return embedWithRetry(chunks)
+}
 
-    const SUB_BATCH_SIZE = 100
-    const CONCURRENCY_LIMIT = 6
+async function generateBatchedEmbeddingsInternal(chunks: string[]): Promise<number[][]> {
     const totalBatches = Math.ceil(chunks.length / SUB_BATCH_SIZE)
-
-    console.log(`[EmbeddingService] Processing ${chunks.length} chunks in ${totalBatches} sub-batches with concurrency ${CONCURRENCY_LIMIT}...`)
+    console.log(`[EmbeddingService] Processing ${chunks.length} chunks in ${totalBatches} sub-batches (${SUB_BATCH_SIZE} size, concurrency ${CONCURRENCY_LIMIT})...`)
 
     const results: number[][] = new Array(chunks.length)
     const batches: string[][] = []
@@ -23,7 +49,6 @@ export async function generateBatchedEmbeddings(chunks: string[]): Promise<numbe
         batches.push(chunks.slice(i, i + SUB_BATCH_SIZE))
     }
 
-    // Process in parallel with limit
     for (let i = 0; i < batches.length; i += CONCURRENCY_LIMIT) {
         const currentBatchSet = batches.slice(i, i + CONCURRENCY_LIMIT)
 
@@ -31,25 +56,21 @@ export async function generateBatchedEmbeddings(chunks: string[]): Promise<numbe
             const batchIndex = i + index
             const startIndex = batchIndex * SUB_BATCH_SIZE
 
-            try {
-                const response = await axios.post(LOCAL_EMBEDDING_URL, {
-                    text: batch
-                }, {
-                    timeout: 600000 // 1 minute per sub-batch
-                })
+            const response = await axiosClient.post("/embed", { text: batch })
 
-                const batchEmbeddings = response.data.embedding
-                for (let j = 0; j < batchEmbeddings.length; j++) {
-                    results[startIndex + j] = batchEmbeddings[j]
-                }
-            } catch (error: any) {
-                console.error(`[EmbeddingService] Batch ${batchIndex} failed:`, error.message)
-                throw error
+            const batchEmbeddings = normalizeEmbeddingResponse(response.data?.embedding)
+            if (batchEmbeddings.length !== batch.length) {
+                throw new Error(
+                    `[EmbeddingService] Batch ${batchIndex} mismatch: expected ${batch.length}, got ${batchEmbeddings.length}`
+                )
+            }
+            for (let j = 0; j < batchEmbeddings.length; j++) {
+                results[startIndex + j] = batchEmbeddings[j]
             }
         }))
     }
 
-    console.log(`[EmbeddingService] Successfully generated ${results.length} embeddings across all batches.`)
+    console.log(`[EmbeddingService] Successfully generated ${results.length} embeddings.`)
     return results
 }
 

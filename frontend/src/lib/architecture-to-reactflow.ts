@@ -92,6 +92,7 @@ export function architectureToReactFlow(
 
   const edges: Edge[] = [];
   const seenEdges = new Set<string>();
+
   for (const d of dependencies) {
     if (!pathSet.has(d.sourcePath) || !pathSet.has(d.targetPath)) continue;
     const srcId = pathToId.get(d.sourcePath);
@@ -101,6 +102,33 @@ export function architectureToReactFlow(
     if (seenEdges.has(key)) continue;
     seenEdges.add(key);
     edges.push({ id: `e-${key}`, source: srcId, target: tgtId });
+  }
+
+  // Fallback: when no import/API deps, create edges from folder structure (index -> siblings)
+  if (edges.length === 0 && pathsToInclude.length >= 2) {
+    const dirToFiles = new Map<string, string[]>();
+    for (const path of pathsToInclude) {
+      const dir = path.includes("/") ? path.replace(/\/[^/]+$/, "") : "";
+      if (!dirToFiles.has(dir)) dirToFiles.set(dir, []);
+      dirToFiles.get(dir)!.push(path);
+    }
+    for (const [, filesInDir] of dirToFiles) {
+      const indexFile = filesInDir.find((f) => /\/index\.(tsx?|jsx?|vue)$/.test(f));
+      if (indexFile && filesInDir.length > 1) {
+        for (const other of filesInDir) {
+          if (other === indexFile) continue;
+          const srcId = pathToId.get(indexFile);
+          const tgtId = pathToId.get(other);
+          if (srcId && tgtId) {
+            const key = `${srcId}-${tgtId}`;
+            if (!seenEdges.has(key)) {
+              seenEdges.add(key);
+              edges.push({ id: `e-${key}`, source: srcId, target: tgtId });
+            }
+          }
+        }
+      }
+    }
   }
 
   return { nodes, edges };

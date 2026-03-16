@@ -18,4 +18,6 @@ export const queryKeys = {
   profile: ["profile"] as const,
   sessions: ["sessions"] as const,
   analysisJob: (jobId: string) => ["analysis", "jobs", jobId] as const,
+  chat: (workspaceId: string, repoId: string) =>
+    ["chat", workspaceId, repoId] as const,
 };

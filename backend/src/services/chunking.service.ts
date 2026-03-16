@@ -1,5 +1,5 @@
 import { SymbolInfo } from "./parser.service"
-import * as nodeCrypto from "crypto"
+import XXH from "xxhashjs"
 
 export interface CodeChunk {
     content: string
@@ -9,18 +9,18 @@ export interface CodeChunk {
 }
 
 /**
- * Generates a SHA256 hash for a given text chunk.
+ * Generates a fast xxHash64 hash for a given text chunk (~15x faster than SHA256).
  */
 export function hashChunk(text: string): string {
-    return nodeCrypto.createHash("sha256").update(text).digest("hex")
+    return XXH.h64(0).update(text).digest().toString(16)
 }
 
 /**
  * Splits code into semantic chunks based on function and class boundaries.
  * Ensures no code is lost between symbols and filters out tiny chunks.
- * Splits chunks larger than 1500 characters.
+ * maxChunkSize ~800 chars ≈ 300–400 tokens; smaller chunks = faster embedding.
  */
-export function chunkCode(code: string, symbols: SymbolInfo[], maxChunkSize = 1500): CodeChunk[] {
+export function chunkCode(code: string, symbols: SymbolInfo[], maxChunkSize = 800): CodeChunk[] {
     const lines = code.split("\n")
     const chunks: CodeChunk[] = []
     const covered = new Set<number>()
@@ -37,8 +37,8 @@ export function chunkCode(code: string, symbols: SymbolInfo[], maxChunkSize = 15
         // Extract content for this symbol
         const content = lines.slice(symbol.startLine - 1, symbol.endLine).join("\n")
         
-        // Skip tiny chunks
-        if (content.trim().length < 30) return
+        // Skip tiny chunks (low value for semantic search)
+        if (content.trim().length < 120) return
 
         // If the symbol is small enough, make it a chunk
         if (content.length <= maxChunkSize) {
@@ -64,7 +64,7 @@ export function chunkCode(code: string, symbols: SymbolInfo[], maxChunkSize = 15
         } else {
             if (start !== -1) {
                 const uncoveredContent = lines.slice(start - 1, i - 1).join("\n")
-                if (uncoveredContent.trim().length >= 30) {
+                if (uncoveredContent.trim().length >= 120) {
                     if (uncoveredContent.length <= maxChunkSize) {
                         chunks.push({
                             content: uncoveredContent,
@@ -84,7 +84,7 @@ export function chunkCode(code: string, symbols: SymbolInfo[], maxChunkSize = 15
     // Handle remaining uncovered code at the end of the file
     if (start !== -1) {
         const uncoveredContent = lines.slice(start - 1).join("\n")
-        if (uncoveredContent.trim().length >= 30) {
+        if (uncoveredContent.trim().length >= 120) {
             if (uncoveredContent.length <= maxChunkSize) {
                 chunks.push({
                     content: uncoveredContent,
@@ -101,13 +101,13 @@ export function chunkCode(code: string, symbols: SymbolInfo[], maxChunkSize = 15
     return chunks
 }
 
-function fallbackChunking(lines: string[], linesPerChunk: number, startOffset = 1, maxChunkSize = 1500): CodeChunk[] {
+function fallbackChunking(lines: string[], linesPerChunk: number, startOffset = 1, maxChunkSize = 800): CodeChunk[] {
     const chunks: CodeChunk[] = []
     for (let i = 0; i < lines.length; i += linesPerChunk) {
         const chunkLines = lines.slice(i, i + linesPerChunk)
         const content = chunkLines.join("\n")
         
-        if (content.trim().length >= 30) {
+        if (content.trim().length >= 120) {
             if (content.length <= maxChunkSize) {
                 chunks.push({
                     content,

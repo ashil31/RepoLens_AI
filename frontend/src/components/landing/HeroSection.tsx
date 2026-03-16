@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Spotlight } from "@/components/ui/spotlight";
 import { HeroEmbeddedDashboard } from "./HeroEmbeddedDashboard";
+import { NoiseBackground } from "./NoiseBackground";
 
 // ─── Shard configs ────────────────────────────────────────────────────────────
 
@@ -322,6 +323,8 @@ function IDEFracture() {
 export function HeroSection() {
   return (
     <section className="hero-dark relative flex min-h-0 w-full flex-col overflow-x-hidden bg-background text-foreground sm:min-h-[90vh]">
+      {/* ── Noise background — absolute, sits behind everything at z-0 ── */}
+      {/* <NoiseBackground /> */}
       <Spotlight />
       <div className="container relative mx-auto flex w-full flex-1 flex-col items-center justify-center overflow-hidden px-4 py-8 sm:py-12 md:py-20">
         <div className="relative z-10 flex flex-col items-center justify-center gap-6 sm:gap-8 md:gap-10">
@@ -333,7 +336,7 @@ export function HeroSection() {
           >
             <h1 className="flex max-w-4xl flex-col text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl md:leading-tight lg:text-6xl">
               <span className="text-center">
-                Understand your{" "} codebase
+                Understand your codebase
                 {/* <span className="hero-gradient-text inline-block">
                   codebase
                 </span> */}
@@ -343,12 +346,13 @@ export function HeroSection() {
                 <IDEFracture />
                 <motion.span
                   className="hero-gradient-text inline-block cursor-default"
+                  data-text="RepoLens"
                   initial={{ opacity: 0, scale: 0.94, filter: "blur(6px)" }}
                   animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
                   transition={{ delay: 0.75, duration: 0.58, ease: "easeOut" }}
                   whileHover={{
                     textShadow:
-                      "0 0 28px rgba(255,255,255,0.55), 0 0 56px rgba(255,255,255,0.28)",
+                      "0 0 12px rgba(255,255,255,0.6), 0 0 32px rgba(255,255,255,0.35)",
                     transition: { duration: 0.25 },
                   }}
                 >

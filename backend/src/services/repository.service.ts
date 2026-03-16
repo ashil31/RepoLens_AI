@@ -1,5 +1,8 @@
+import { Readable } from "stream"
+import { pipeline } from "stream/promises"
 import { Octokit } from "@octokit/rest"
 import * as nodeCrypto from "crypto"
+import { from as copyFrom } from "pg-copy-streams"
 import { AppError } from "../utils/appError"
 import { HTTPSTATUS } from "../config/http.config"
 import {
@@ -9,13 +12,14 @@ import {
 } from "../repositories/project.repository"
 import * as githubApi from "./github.service"
 import * as githubRepository from "../repositories/github.repository"
-import { prisma } from "../database/prisma"
+import { prisma, pool } from "../database/prisma"
 import { JobStep } from "@prisma/client"
+import pLimit from "p-limit"
 import { parseCodeFile } from "./parser.service"
 import { filterFiles } from "../utils/fileFilter"
 import { resolveImport } from "../utils/importResolver"
 import { buildApiDependencies } from "./api-dependency.service"
-import { chunkCode } from "./chunking.service"
+import { chunkCode, hashChunk } from "./chunking.service"
 import { generateBatchedEmbeddings } from "./embedding.service"
 import { AIService } from "./ai.service"
 
@@ -104,7 +108,7 @@ export const fetchRepositoryFiles = async (
         return !binaryExtensions.includes("." + ext)
     })
 
-    const MAX_FILES = 500 // Increased for better analysis
+    const MAX_FILES = 2000
     const filesToFetch = codeFiles.slice(0, MAX_FILES)
 
     const fileContents = await Promise.all(
@@ -162,6 +166,14 @@ export const processRepositoryAnalysis = async (
     githubUrl: string,
     accessToken?: string
 ) => {
+    await prisma.analysisJob.update({
+        where: { id: jobId },
+        data: {
+            status: "PROCESSING",
+            startedAt: new Date()
+        }
+    })
+
     const { owner, name } = parseGitHubUrl(githubUrl)
     const octokit = accessToken ? new Octokit({ auth: accessToken }) : getDefaultOctokit()
 
@@ -203,11 +215,14 @@ export const processRepositoryAnalysis = async (
             await addJobLog(jobId, `Total line limit reached (${MAX_TOTAL_LINES}). Some files were skipped.`)
         }
 
+        const limit = pLimit(8)
         const parsedFiles = await Promise.all(
-            filteredFiles.map(async file => ({
-                ...file,
-                meta: parseCodeFile(file.path, file.content)
-            }))
+            filteredFiles.map((file) =>
+                limit(() => ({
+                    ...file,
+                    meta: parseCodeFile(file.path, file.content)
+                }))
+            )
         )
 
         const allSymbols = parsedFiles.flatMap(f => f.meta.symbols.map(s => ({ ...s, filePath: f.path })))
@@ -248,22 +263,29 @@ export const processRepositoryAnalysis = async (
 
         await addJobLog(jobId, `Resolved ${dependencies.length} file dependencies (${apiDeps.length} API edges)`)
 
-        // 5. Clear old data (before streaming new data)
-        await addJobLog(jobId, "Clearing old repository data...")
-        const existingFiles = await prisma.repositoryFile.findMany({ where: { repositoryId }, select: { id: true } })
-        const fileIds = existingFiles.map(f => f.id)
-        if (fileIds.length > 0) {
-            await prisma.codeEmbedding.deleteMany({ where: { fileId: { in: fileIds } } })
-            await prisma.repositoryFile.deleteMany({ where: { id: { in: fileIds } } })
+        // 5. Prepare for incremental embedding: fetch existing files (path -> contentHash)
+        const existingFiles = await prisma.repositoryFile.findMany({
+            where: { repositoryId },
+            select: { id: true, path: true, contentHash: true }
+        })
+        const existingByPath = new Map(existingFiles.map(f => [f.path, f]))
+        const newFilePaths = new Set(parsedFiles.map(f => f.path))
+
+        // Delete files no longer in repo
+        const toDelete = existingFiles.filter(f => !newFilePaths.has(f.path))
+        if (toDelete.length > 0) {
+            await prisma.repositoryFile.deleteMany({ where: { id: { in: toDelete.map(f => f.id) } } })
+            await addJobLog(jobId, `Removed ${toDelete.length} files no longer in repo`)
         }
+
         await prisma.repositoryDependency.deleteMany({ where: { repositoryId } })
 
-        // 6. Streaming: Chunking, Embedding & Saving (Per File)
+        // 6. Streaming: Chunking, Embedding & Saving (Per File) - skip unchanged files
         // 6. Streaming: Chunking, Buffering, Embedding & Saving
         await updateJobProgress(jobId, "EMBEDDING", 50)
         await addJobLog(jobId, "Processing files with buffered embedding pipeline...")
 
-        const CHUNK_BATCH_TARGET = 200
+        const CHUNK_BATCH_TARGET = 128
 
         type BufferedChunk = {
             chunk: any
@@ -273,51 +295,72 @@ export const processRepositoryAnalysis = async (
 
         let chunkBuffer: string[] = []
         let chunkMeta: BufferedChunk[] = []
+        const globalChunkHashes = new Set<string>()
+
+        /** Escape text for PostgreSQL COPY format: \ -> \\, \t\n\r preserved */
+        function escapeCopyText(s: string): string {
+            return s.replace(/\\/g, "\\\\").replace(/\t/g, "\\t").replace(/\n/g, "\\n").replace(/\r/g, "\\r")
+        }
 
         async function flushEmbeddingBuffer() {
             if (chunkBuffer.length === 0) return
 
             const embeddings = await generateBatchedEmbeddings(chunkBuffer)
 
-            const valuesStrings: string[] = []
-            const params: any[] = []
-
-            for (let i = 0; i < embeddings.length; i++) {
-                const meta = chunkMeta[i]
-                const embedding = embeddings[i]
-
-                const id = nodeCrypto.randomUUID()
-                const offset = params.length
-
-                valuesStrings.push(
-                    `($${offset + 1}, $${offset + 2}, $${offset + 3}::vector, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, NOW())`
-                )
-
-                params.push(
-                    id,
-                    meta.chunk.content,
-                    `[${embedding.join(",")}]`,
-                    meta.chunk.startLine,
-                    meta.chunk.endLine,
-                    meta.fileId,
-                    meta.chunk.symbolName || null,
-                    meta.language
+            if (embeddings.length !== chunkMeta.length) {
+                throw new Error(
+                    `Embedding mismatch: expected ${chunkMeta.length}, got ${embeddings.length}`
                 )
             }
 
-            await prisma.$executeRawUnsafe(
-                `INSERT INTO code_embeddings 
-      (id, chunk, embedding, "startLine", "endLine", "fileId", "symbolName", "language", "createdAt")
-     VALUES ${valuesStrings.join(",")}`,
-                ...params
-            )
+            const rows: string[] = []
+            for (let i = 0; i < embeddings.length; i++) {
+                const meta = chunkMeta[i]
+                const embedding = embeddings[i]
+                const id = nodeCrypto.randomUUID()
+                const chunkEscaped = escapeCopyText(meta.chunk.content)
+                const vecStr = `[${(embedding as number[]).join(",")}]`
+                const startLine = meta.chunk.startLine ?? "\\N"
+                const endLine = meta.chunk.endLine ?? "\\N"
+                const symbolName = meta.chunk.symbolName ? escapeCopyText(meta.chunk.symbolName) : "\\N"
+                const language = meta.language ? escapeCopyText(meta.language) : "\\N"
+                rows.push(`${id}\t${chunkEscaped}\t${vecStr}\t${startLine}\t${endLine}\t${meta.fileId}\t${symbolName}\t${language}`)
+            }
+
+            const client = await pool.connect()
+            try {
+                const copyStream = client.query(
+                    copyFrom(
+                        `COPY code_embeddings (id, chunk, embedding, "startLine", "endLine", "fileId", "symbolName", "language") FROM STDIN`
+                    )
+                )
+                const readable = Readable.from(rows.map((r) => r + "\n"))
+                await pipeline(readable, copyStream)
+            } catch (err) {
+                console.error("Embedding COPY failed:", err)
+                throw err
+            } finally {
+                client.release()
+            }
 
             chunkBuffer = []
             chunkMeta = []
         }
 
+        let skippedCount = 0
         for (let i = 0; i < parsedFiles.length; i++) {
             const file = parsedFiles[i]
+            const contentHash = nodeCrypto.createHash("sha256").update(file.content).digest("hex")
+            const existing = existingByPath.get(file.path)
+
+            if (existing?.contentHash === contentHash) {
+                skippedCount++
+                continue
+            }
+
+            if (existing) {
+                await prisma.repositoryFile.delete({ where: { id: existing.id } })
+            }
 
             const chunks = chunkCode(file.content, file.meta.symbols)
 
@@ -325,6 +368,7 @@ export const processRepositoryAnalysis = async (
                 data: {
                     repositoryId,
                     path: file.path,
+                    contentHash,
                     content: file.content,
                     language: file.meta.language,
                     symbols: file.meta.symbols as any,
@@ -341,10 +385,7 @@ export const processRepositoryAnalysis = async (
             >()
 
             chunks.forEach((chunk, index) => {
-                const hash = nodeCrypto
-                    .createHash("sha256")
-                    .update(chunk.content)
-                    .digest("hex")
+                const hash = hashChunk(chunk.content)
 
                 if (uniqueChunksMap.has(hash)) {
                     uniqueChunksMap.get(hash)!.originalIndexes.push(index)
@@ -358,9 +399,12 @@ export const processRepositoryAnalysis = async (
             uniqueChunkEntries.forEach(entry => {
                 entry.originalIndexes.forEach(idx => {
                     const chunk = chunks[idx]
+                    const hash = hashChunk(chunk.content)
+
+                    if (globalChunkHashes.has(hash)) return
+                    globalChunkHashes.add(hash)
 
                     chunkBuffer.push(chunk.content)
-
                     chunkMeta.push({
                         chunk,
                         fileId: dbFile.id,
@@ -372,7 +416,13 @@ export const processRepositoryAnalysis = async (
             if (chunkBuffer.length >= CHUNK_BATCH_TARGET) {
                 await flushEmbeddingBuffer()
             }
+        }
 
+        if (skippedCount > 0) {
+            await addJobLog(jobId, `Skipped re-embedding ${skippedCount} unchanged files (content hash match)`)
+        }
+
+        for (let i = 0; i < parsedFiles.length; i++) {
             if (i % 5 === 0 || i === parsedFiles.length - 1) {
                 const progress = 50 + Math.floor(((i + 1) / parsedFiles.length) * 30)
                 await updateJobProgress(jobId, "EMBEDDING", progress)

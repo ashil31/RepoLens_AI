@@ -99,10 +99,10 @@ export function Navbar({ variant = "default" }: NavbarProps) {
   return (
     <header
       className={cn(
-        "fixed left-0 right-0 top-0 z-50 w-full border-b backdrop-blur supports-backdrop-filter:bg-background/60",
+        "fixed left-0 right-0 top-0 z-50 w-full border-b backdrop-blur",
         isLanding
-          ? "border-white/8 bg-[#0a0a0a]/95 text-white"
-          : "border-border bg-background/95",
+          ? "border-white/8 bg-[#0a0a0a]/95 text-white supports-backdrop-filter:bg-[#0a0a0a]/95"
+          : "border-border bg-background/95 supports-backdrop-filter:bg-background/60",
       )}
     >
       <div className="container mx-auto flex h-12 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:h-14 sm:px-6">
@@ -114,9 +114,9 @@ export function Navbar({ variant = "default" }: NavbarProps) {
           )}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden sm:h-12 sm:w-12">
-            <RepoLensLogo id="navbar-logo" size="lg" className="h-full w-full" />
+            <RepoLensLogo id="navbar-logo" size="lg" variant={isLanding ? "light" : "auto"} className="h-full w-full" />
           </span>
-          <span className="truncate sm:mt-0.5 sm:-ml-1">RepoLens</span>
+          <span className="truncate sm:mt-1.5 sm:-ml-1">RepoLens</span>
         </Link>
 
         {/* Desktop nav */}

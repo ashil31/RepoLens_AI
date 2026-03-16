@@ -34,6 +34,22 @@ export function setOnRefreshFailure(fn: () => void) {
 
 let refreshPromise: Promise<string> | null = null;
 
+/**
+ * Attempts to refresh the access token using the httpOnly refresh cookie.
+ * Updates the auth store on success; calls onRefreshFailure on error.
+ * Used by chat service and other raw fetch calls that bypass the api client.
+ */
+export async function tryRefreshToken(): Promise<string | null> {
+  try {
+    const token = await refreshAccessToken();
+    onRefreshSuccess?.(token);
+    return token;
+  } catch {
+    onRefreshFailure?.();
+    return null;
+  }
+}
+
 async function refreshAccessToken(): Promise<string> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {

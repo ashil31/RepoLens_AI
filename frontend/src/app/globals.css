@@ -19,26 +19,38 @@
   --destructive-foreground: #ffffff;
 }
 
+/* Light theme palette – single source for html.light and .repolens-logo-light */
+:root {
+  --light-accent: #e5e5e5;
+  --light-muted: #f5f5f5;
+  --light-border: #e5e5e5;
+  --light-card-logo: #fafafa;
+  --light-accent-logo: #e5e5e5;
+  --light-muted-logo: #f5f5f5;
+  --light-muted-foreground: #737373;
+  --light-primary-foreground: #fafafa;
+}
+
 /* Light – standard light theme */
 html.light {
   --background: #ffffff;
   --foreground: #171717;
-  --card: #fafafa;
-  --card-logo: #fafafa;
+  --card: var(--light-card-logo);
+  --card-logo: var(--light-card-logo);
   --card-foreground: #171717;
   --popover: #ffffff;
   --popover-foreground: #171717;
-  --border: #e5e5e5;
-  --muted: #f5f5f5;
-  --muted-logo: #f5f5f5;
-  --muted-foreground: #737373;
-  --accent: #e5e5e5;
-  --accent-logo: #e5e5e5;
+  --border: var(--light-border);
+  --muted: var(--light-muted);
+  --muted-logo: var(--light-muted-logo);
+  --muted-foreground: var(--light-muted-foreground);
+  --accent: var(--light-accent);
+  --accent-logo: var(--light-accent-logo);
   --ring: #171717;
   --primary: #171717;
-  --primary-foreground: #fafafa;
+  --primary-foreground: var(--light-primary-foreground);
   --destructive: #7f1d1d;
-  --destructive-foreground: #fafafa;
+  --destructive-foreground: var(--light-primary-foreground);
 }
 
 /* Pure Light – high contrast, paper-like, cooler tone */
@@ -133,6 +145,54 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Chat markdown content – Cursor/ChatGPT-style typography */
+.markdown-content p {
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content h1,
+.markdown-content h2 {
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.markdown-content h1:first-child,
+.markdown-content h2:first-child {
+  margin-top: 0;
+}
+
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin-top: 6px;
+  margin-bottom: 3px;
+}
+
+.markdown-content li {
+  margin-bottom: 3px;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+.markdown-content table {
+  font-size: 0.75rem;
+}
+
+.markdown-content table th,
+.markdown-content table td {
+  vertical-align: top;
 }
 
 /* Custom scrollbar for dashboard content (e.g. Settings page) */
@@ -431,6 +491,18 @@ body {
   border: 1px solid var(--border) !important;
   border-radius: 8px !important;
   box-shadow: 0 0 0 1px var(--border), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Logo variant: uses light theme palette (same as html.light) for dark navbar on landing page */
+.repolens-logo-light {
+  --accent: var(--light-accent);
+  --muted: var(--light-muted);
+  --border: var(--light-border);
+  --card-logo: var(--light-card-logo);
+  --accent-logo: var(--light-accent-logo);
+  --muted-logo: var(--light-muted-logo);
+  --muted-foreground: var(--light-muted-foreground);
+  --primary-foreground: var(--light-primary-foreground);
 }
 
 /* Hero section: scoped dark theme for embedded dashboard (Linear-style) */

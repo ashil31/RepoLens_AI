@@ -143,6 +143,7 @@ model AnalysisJob {
 model RepositoryFile {
   id           String          @id @default(cuid())
   path         String
+  contentHash  String?         // sha256(content) - skip re-embedding if unchanged
   language     String?
   content      String?
   tokenSize    Int?
@@ -161,7 +162,7 @@ model RepositoryFile {
 model CodeEmbedding {
   id         String                 @id @default(cuid())
   chunk      String
-  embedding  Unsupported("vector(768)")?
+  embedding  Unsupported("vector(384)")?
   startLine  Int?
   endLine    Int?
   createdAt  DateTime               @default(now())
@@ -178,7 +179,7 @@ model RepositoryEmbedding {
   id           String                 @id @default(cuid())
   repositoryId String                 @unique
   summary      String
-  embedding    Unsupported("vector(768)")
+  embedding    Unsupported("vector(384)")
   createdAt    DateTime               @default(now())
   repository   Repository             @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 
