@@ -35,7 +35,7 @@
     "jsonwebtoken": "^9.0.3",
     "madge": "^8.0.0",
     "openai": "^6.27.0",
-    "p-limit": "^6.2.0",
+    "p-limit": "^3.0.1",
     "pg": "^8.20.0",
     "pg-copy-streams": "^7.0.0",
     "prisma": "^7.4.2",

@@ -16,7 +16,6 @@ export const analysisQueue = new Queue(ANALYSIS_QUEUE_NAME, {
         },
         removeOnComplete: true,
         removeOnFail: false,
-        timeout: 15 * 60 * 1000, // 15 minutes timeout
     },
 })
 

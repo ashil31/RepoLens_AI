@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import * as repositoryService from "@/services/repository.service";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store";
 
-export default function GitHubCallbackPage() {
+function GitHubCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
@@ -89,5 +89,18 @@ export default function GitHubCallbackPage() {
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       )}
     </div>
+  );
+}
+
+export default function GitHubCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6">
+        <p className="text-muted-foreground">Loading…</p>
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    }>
+      <GitHubCallbackContent />
+    </Suspense>
   );
 }

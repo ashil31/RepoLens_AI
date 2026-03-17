@@ -22,6 +22,13 @@ import { buildApiDependencies } from "./api-dependency.service"
 import { chunkCode, hashChunk } from "./chunking.service"
 import { generateBatchedEmbeddings } from "./embedding.service"
 import { AIService } from "./ai.service"
+import { SymbolInfo, FileMetadata } from "./parser.service"
+
+interface ParsedFile {
+    path: string
+    content: string
+    meta: FileMetadata
+}
 
 // Default Octokit (no auth – public repos only)
 const getDefaultOctokit = () => new Octokit({})
@@ -216,9 +223,9 @@ export const processRepositoryAnalysis = async (
         }
 
         const limit = pLimit(8)
-        const parsedFiles = await Promise.all(
+        const parsedFiles: ParsedFile[] = await Promise.all(
             filteredFiles.map((file) =>
-                limit(() => ({
+                limit(async () => ({
                     ...file,
                     meta: parseCodeFile(file.path, file.content)
                 }))
@@ -232,12 +239,12 @@ export const processRepositoryAnalysis = async (
         await updateJobProgress(jobId, "BUILDING_GRAPH", 35)
         await addJobLog(jobId, "Building dependency graph...")
 
-        const allFilePaths = new Set(parsedFiles.map((f) => f.path))
+        const allFilePaths = new Set<string>(parsedFiles.map((f: ParsedFile) => f.path))
         const dependencies: { sourcePath: string; targetPath: string }[] = []
         const seenEdges = new Set<string>()
 
-        parsedFiles.forEach(file => {
-            file.meta.imports.forEach(imp => {
+        parsedFiles.forEach((file: ParsedFile) => {
+            file.meta.imports.forEach((imp: string) => {
                 const resolved = resolveImport(file.path, imp.trim(), allFilePaths)
                 if (!resolved || resolved === file.path) return
                 const key = `${file.path}->${resolved}`
@@ -252,7 +259,7 @@ export const processRepositoryAnalysis = async (
 
         // API edges: frontend (axios/fetch) → backend routes
         const apiDeps = buildApiDependencies(
-            parsedFiles.map((f) => ({ path: f.path, content: f.content, meta: f.meta }))
+            parsedFiles.map((f: ParsedFile) => ({ path: f.path, content: f.content, meta: f.meta }))
         )
         apiDeps.forEach((d) => {
             const key = `${d.sourcePath}->${d.targetPath}`
@@ -269,7 +276,7 @@ export const processRepositoryAnalysis = async (
             select: { id: true, path: true, contentHash: true }
         })
         const existingByPath = new Map(existingFiles.map(f => [f.path, f]))
-        const newFilePaths = new Set(parsedFiles.map(f => f.path))
+        const newFilePaths = new Set<string>(parsedFiles.map((f: ParsedFile) => f.path))
 
         // Delete files no longer in repo
         const toDelete = existingFiles.filter(f => !newFilePaths.has(f.path))
@@ -332,10 +339,10 @@ export const processRepositoryAnalysis = async (
                 const copyStream = client.query(
                     copyFrom(
                         `COPY code_embeddings (id, chunk, embedding, "startLine", "endLine", "fileId", "symbolName", "language") FROM STDIN`
-                    )
+                    ) as any
                 )
                 const readable = Readable.from(rows.map((r) => r + "\n"))
-                await pipeline(readable, copyStream)
+                await pipeline(readable as any, copyStream as any)
             } catch (err) {
                 console.error("Embedding COPY failed:", err)
                 throw err
@@ -455,10 +462,10 @@ Repository: ${owner}/${name}
 Primary Language: ${primaryLanguage}
 
 File Structure:
-${parsedFiles.slice(0, 50).map(f => f.path).join("\n")}${parsedFiles.length > 50 ? "\n..." : ""}
+${parsedFiles.slice(0, 50).map((f: ParsedFile) => f.path).join("\n")}${parsedFiles.length > 50 ? "\n..." : ""}
 
 Key Symbols:
-${allSymbols.slice(0, 50).map(s => `${s.type}: ${s.name}`).join("\n")}${allSymbols.length > 50 ? "\n..." : ""}
+${allSymbols.slice(0, 50).map((s: any) => `${s.type}: ${s.name}`).join("\n")}${allSymbols.length > 50 ? "\n..." : ""}
 
 Dependencies:
 ${Array.from(new Set(dependencies.map(d => d.targetPath))).slice(0, 30).join("\n")}

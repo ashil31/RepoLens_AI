@@ -10,7 +10,11 @@ async function deleteRepo() {
         })
         console.log(`✅ Successfully deleted repository: ${deleted.owner}/${deleted.name}`)
     } catch (err) {
-        console.error("❌ Failed to delete repository or it was already deleted:", err.message)
+        if (err instanceof Error) {
+            console.error("❌ Failed to delete repository or it was already deleted:", err.message)
+        } else {
+            console.error("❌ Failed to delete repository or it was already deleted:", err)
+        }
     } finally {
         await prisma.$disconnect()
     }
