@@ -13,7 +13,7 @@ export interface GraphBounds {
   height: number;
 }
 
-type NodeLike = { id: string; position: { x: number; y: number }; width?: number; height?: number };
+type NodeLike = { id: string; position: { x: number; y: number }; width?: number | null; height?: number | null };
 
 /**
  * Returns the bounding rectangle for the graph with padding for export.

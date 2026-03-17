@@ -17,6 +17,11 @@
   --primary-foreground: #ffffff;
   --destructive: #7f1d1d;
   --destructive-foreground: #ffffff;
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 42%;
+  --chart-3: 280 65% 52%;
+  --chart-4: 30 75% 52%;
+  --chart-5: 340 65% 52%;
 }
 
 /* Light theme palette – single source for html.light and .repolens-logo-light */
@@ -51,6 +56,11 @@ html.light {
   --primary-foreground: var(--light-primary-foreground);
   --destructive: #7f1d1d;
   --destructive-foreground: var(--light-primary-foreground);
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 42%;
+  --chart-3: 280 65% 52%;
+  --chart-4: 30 75% 52%;
+  --chart-5: 340 65% 52%;
 }
 
 /* Pure Light – high contrast, paper-like, cooler tone */
@@ -73,6 +83,11 @@ html.pure-light {
   --primary-foreground: #fafafa;
   --destructive: #991b1b;
   --destructive-foreground: #fafafa;
+  --chart-1: 220 70% 58%;
+  --chart-2: 160 55% 52%;
+  --chart-3: 280 60% 62%;
+  --chart-4: 30 80% 58%;
+  --chart-5: 340 60% 62%;
 }
 
 /* Dark – pure black, Vercel-style */
@@ -95,6 +110,11 @@ html.dark {
   --primary-foreground: #000000;
   --destructive: #7f1d1d;
   --destructive-foreground: #edede6;
+  --chart-1: 217 91% 60%;
+  --chart-2: 142 71% 45%;
+  --chart-3: 271 81% 56%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 330 81% 60%;
 }
 
 /* Classic Dark – softer gray dark (e.g. IDE / classic app dark) */
@@ -117,6 +137,11 @@ html.classic-dark {
   --primary-foreground: #1c1c1c;
   --destructive: #5c2020;
   --destructive-foreground: #e5e5e5;
+  --chart-1: 217 91% 60%;
+  --chart-2: 142 71% 45%;
+  --chart-3: 271 81% 56%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 330 81% 60%;
 }
 
 @theme inline {
@@ -631,4 +656,9 @@ body {
 }
 .scrollbar-hidden-landing::-webkit-scrollbar {
   display: none;
+}
+
+/* RepoInsights charts: pie slice labels use theme foreground for contrast */
+.repo-insights .recharts-pie-label-text {
+  fill: hsl(var(--foreground));
 }

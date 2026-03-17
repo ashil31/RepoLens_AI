@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { Suspense, useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { DashboardPageShell } from "@/components/dashboard";
@@ -23,7 +23,7 @@ const GITHUB_INSTALL_URL =
   process.env.NEXT_PUBLIC_GITHUB_APP_INSTALL_URL ||
   "https://github.com/apps/repolens-dev/installations/new";
 
-export default function RepositoriesPage() {
+function RepositoriesPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -435,5 +435,23 @@ export default function RepositoriesPage() {
         </DashboardPageShell>
       </div>
     </div>
+  );
+}
+
+export default function RepositoriesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full min-h-0 flex-col overflow-x-hidden">
+          <div className="dashboard-content-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+            <DashboardPageShell title="Repositories">
+              <p className="p-4 text-sm text-muted-foreground">Loading repositories…</p>
+            </DashboardPageShell>
+          </div>
+        </div>
+      }
+    >
+      <RepositoriesPageInner />
+    </Suspense>
   );
 }

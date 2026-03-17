@@ -103,7 +103,6 @@ export function HeroEmbeddedDashboard() {
               <RepoChat
                 messages={MOCK_MESSAGES}
                 onSendMessage={() => {}}
-                isThinking={false}
                 conversations={[]}
               />
             }

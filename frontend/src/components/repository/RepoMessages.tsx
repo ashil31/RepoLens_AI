@@ -1,9 +1,118 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import type { ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, RefreshCw, Share2, FileCode2, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { Copy, RefreshCw, Share2, FileCode2, ChevronDown, ChevronUp, ExternalLink, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// ─── Diagram flow (Quick visual flow / summary diagram) ─────────────────────
+
+const DIAGRAM_HEADING_RE =
+  /(\n|^)(?:\*\*|##?)?\s*(?:📌\s*)?(?:Quick\s+)?(?:visual\s+flow|summary\s+diagram)\s*\*?\s*\n+([\s\S]*?)(?=\n{2,}|\n(?:\*\*|##?)\s|\s*$)/i;
+
+function splitContentForDiagram(content: string): {
+  before: string;
+  diagram: string | null;
+  after: string;
+} {
+  const m = content.match(DIAGRAM_HEADING_RE);
+  if (!m) return { before: content, diagram: null, after: "" };
+  const fullMatch = m[0];
+  const diagramText = m[2].trim();
+  // Accept multiple arrow styles: ->, →, ──>, etc.
+  if (!/(->|→|─+>)/.test(diagramText)) return { before: content, diagram: null, after: "" };
+  const index = content.indexOf(fullMatch);
+  const before = content.slice(0, index).trimEnd();
+  const after = content.slice(index + fullMatch.length).trimStart();
+  return { before, diagram: diagramText, after };
+}
+
+const ARROW_SPLIT_RE = /\s*(?:-+>|→|─+>)\s*/g;
+const PIPE_BREAK_RE = /\s*(?:\||│|└─?>|├─?>)\s*/g;
+
+function cleanNodeLabel(label: string) {
+  return label
+    .replace(/\s+/g, " ")
+    .replace(/^\[|\]$/g, "")
+    .trim();
+}
+
+/** Parse flow text like "[Browser] ──> /auth/signup -> 201" into node labels */
+function parseFlowNodes(text: string): string[] {
+  return text
+    .split(ARROW_SPLIT_RE)
+    .map(cleanNodeLabel)
+    .filter(Boolean);
+}
+
+/** Split diagram content into main line + optional branch lines using pipes */
+function splitDiagramLines(raw: string): string[] {
+  // Normalize common "pipe" separators into newlines, then keep arrow-like lines.
+  const normalized = raw.replace(PIPE_BREAK_RE, "\n").replace(/\r\n/g, "\n");
+  return normalized
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => /(->|→|─+>)/.test(l));
+}
+
+function DiagramFlowView({ content }: { content: string }) {
+  const lines = splitDiagramLines(content);
+  const primaryNodes = lines[0] ? parseFlowNodes(lines[0]) : [];
+
+  if (primaryNodes.length === 0) return null;
+
+  return (
+    <div className="my-4 overflow-x-auto rounded-xl border border-border/60 bg-muted/20 p-4 shadow-inner">
+      <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <GitBranch className="h-3.5 w-3.5 shrink-0 text-primary/80" />
+        <span>Quick visual flow</span>
+      </div>
+      <div className="flex flex-nowrap items-center gap-0 min-w-0">
+        {primaryNodes.map((label, i) => (
+          <span key={`${i}-${label}`} className="flex shrink-0 items-center gap-0">
+            <span
+              className={cn(
+                "rounded-lg border border-border bg-background/90 px-2.5 py-2",
+                "font-mono text-[11px] text-foreground shadow-sm whitespace-nowrap max-w-[220px] truncate"
+              )}
+              title={label}
+            >
+              {label}
+            </span>
+            {i < primaryNodes.length - 1 && (
+              <span className="mx-1 shrink-0 text-muted-foreground/80 font-medium" aria-hidden>
+                →
+              </span>
+            )}
+          </span>
+        ))}
+      </div>
+      {lines.length > 1 && (
+        <div className="mt-3 space-y-2 border-t border-border/40 pt-3">
+          {lines.slice(1).map((line, i) => {
+            const nodes = parseFlowNodes(line);
+            if (nodes.length === 0) return null;
+            return (
+              <div key={i} className="flex flex-wrap items-center gap-1.5">
+                {nodes.map((label, j) => (
+                  <span key={`${i}-${j}-${label}`} className="flex items-center gap-1.5">
+                    <span className="rounded border border-border/60 bg-muted/40 px-2 py-1 font-mono text-[10px] text-foreground">
+                      {label}
+                    </span>
+                    {j < nodes.length - 1 && (
+                      <span className="text-[10px] text-muted-foreground/60">→</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export type MessageRole = "user" | "assistant";
 
@@ -136,33 +245,30 @@ function MessageContent({
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  return (
-    <div
-      className={cn(
-        "markdown-content wrap-break-word",
-        role === "user" ? "text-background" : "text-foreground"
-      )}
-    >
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
+  const isAssistant = role === "assistant";
+  const { before, diagram, after } = isAssistant ? splitContentForDiagram(content) : { before: content, diagram: null, after: "" };
+  const hasDiagram = isAssistant && diagram != null && diagram.length > 0;
+
+  // react-markdown component typings are verbose; keep this localized to avoid noise.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markdownComponents: any = {
           // Tables
-          table: ({ children }) => (
+          table: ({ children }: { children?: ReactNode }) => (
             <div className="my-3 overflow-x-auto rounded-lg border border-border">
               <table className="w-full min-w-[200px] border-collapse text-xs">{children}</table>
             </div>
           ),
-          thead: ({ children }) => (
+          thead: ({ children }: { children?: ReactNode }) => (
             <thead className="bg-muted/40 text-left">{children}</thead>
           ),
-          tbody: ({ children }) => (
+          tbody: ({ children }: { children?: ReactNode }) => (
             <tbody className="divide-y divide-border/40">{children}</tbody>
           ),
-          tr: ({ children }) => <tr>{children}</tr>,
-          th: ({ children }) => (
+          tr: ({ children }: { children?: ReactNode }) => <tr>{children}</tr>,
+          th: ({ children }: { children?: ReactNode }) => (
             <th className="px-3 py-2 text-xs font-medium text-foreground">{children}</th>
           ),
-          td: ({ children }) => (
+          td: ({ children }: { children?: ReactNode }) => (
             <td className="px-3 py-2 text-xs text-muted-foreground">{children}</td>
           ),
 
@@ -217,53 +323,53 @@ function MessageContent({
           },
 
           // Headings
-          h1: ({ children }) => (
+          h1: ({ children }: { children?: ReactNode }) => (
             <h1 className="text-lg font-semibold mt-3 mb-2 first:mt-0">{children}</h1>
           ),
-          h2: ({ children }) => (
+          h2: ({ children }: { children?: ReactNode }) => (
             <h2 className="text-base font-semibold mt-3 mb-2">{children}</h2>
           ),
-          h3: ({ children }) => (
+          h3: ({ children }: { children?: ReactNode }) => (
             <h3 className="text-sm font-semibold mt-2 mb-1">{children}</h3>
           ),
-          h4: ({ children }) => (
+          h4: ({ children }: { children?: ReactNode }) => (
             <h4 className="text-sm font-medium mt-2 mb-1">{children}</h4>
           ),
-          h5: ({ children }) => (
+          h5: ({ children }: { children?: ReactNode }) => (
             <h5 className="text-xs font-medium mt-2 mb-1">{children}</h5>
           ),
-          h6: ({ children }) => (
+          h6: ({ children }: { children?: ReactNode }) => (
             <h6 className="text-xs font-medium mt-2 mb-1 text-muted-foreground">{children}</h6>
           ),
 
           // Lists
-          ul: ({ children }) => (
+          ul: ({ children }: { children?: ReactNode }) => (
             <ul className="list-disc pl-4 space-y-1 my-2">{children}</ul>
           ),
-          ol: ({ children }) => (
+          ol: ({ children }: { children?: ReactNode }) => (
             <ol className="list-decimal pl-4 space-y-1 my-2">{children}</ol>
           ),
-          li: ({ children }) => (
+          li: ({ children }: { children?: ReactNode }) => (
             <li className="text-sm">
               {mapChildrenWithFileLinks(children, onFileClick)}
             </li>
           ),
 
           // Blockquote
-          blockquote: ({ children }) => (
+          blockquote: ({ children }: { children?: ReactNode }) => (
             <blockquote className="border-l-2 border-primary/40 pl-3 italic text-muted-foreground my-2">
               {children}
             </blockquote>
           ),
 
           // Paragraph with file links
-          p: ({ children }) => (
+          p: ({ children }: { children?: ReactNode }) => (
             <p className="mb-2 last:mb-0 leading-relaxed">
               {mapChildrenWithFileLinks(children, onFileClick)}
             </p>
           ),
 
-          a: ({ children, href }) => (
+          a: ({ children, href }: { children?: ReactNode; href?: string }) => (
             <a
               href={href}
               target="_blank"
@@ -274,14 +380,38 @@ function MessageContent({
             </a>
           ),
 
-          pre: ({ children }) => <div className="my-0">{children}</div>,
+          pre: ({ children }: { children?: ReactNode }) => <div className="my-0">{children}</div>,
           hr: () => <hr className="my-3 border-border" />,
-          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-          em: ({ children }) => <em className="italic">{children}</em>,
-        }}
-      >
-        {content}
-      </ReactMarkdown>
+          strong: ({ children }: { children?: ReactNode }) => <strong className="font-semibold">{children}</strong>,
+          em: ({ children }: { children?: ReactNode }) => <em className="italic">{children}</em>,
+  };
+
+  return (
+    <div
+      className={cn(
+        "markdown-content wrap-break-word",
+        role === "user" ? "text-background" : "text-foreground"
+      )}
+    >
+      {hasDiagram ? (
+        <>
+          {before ? (
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {before}
+            </ReactMarkdown>
+          ) : null}
+          <DiagramFlowView content={diagram} />
+          {after ? (
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {after}
+            </ReactMarkdown>
+          ) : null}
+        </>
+      ) : (
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {content}
+        </ReactMarkdown>
+      )}
     </div>
   );
 }

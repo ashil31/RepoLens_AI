@@ -29,11 +29,7 @@ type RepoShareDialogProps = {
   /** Ref to architecture graph container for PNG export. Only used when shareMode is "architecture". */
   architectureGraphRef?: React.RefObject<HTMLDivElement | null>;
   /** Ref to ReactFlow instance for fitView and Excalidraw export. */
-  reactFlowInstanceRef?: React.RefObject<{
-    fitView: (opts?: { padding?: number; duration?: number }) => boolean;
-    getNodes: () => { id: string; position: { x: number; y: number }; width?: number; height?: number; data?: { label?: string } }[];
-    getEdges: () => { id: string; source: string; target: string }[];
-  } | null>;
+  reactFlowInstanceRef?: React.RefObject<import("reactflow").ReactFlowInstance | null>;
   className?: string;
 };
 

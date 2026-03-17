@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileText, FileCode, Network, BarChart3, Maximize2, FileEdit } from "lucide-react";
+import type { ReactFlowInstance } from "reactflow";
 import { ArchitectureNotesMarkdown } from "./ArchitectureNotesMarkdown";
 import { RepoMarkdownDoc } from "./RepoMarkdownDoc";
 import { RepoFilePreview } from "./RepoFilePreview";
@@ -28,14 +29,8 @@ type RepoPreviewPanelProps = {
   onExpand?: (panel: PreviewMode) => void;
   /** Ref for architecture graph container (used for PNG export) */
   architectureGraphRef?: React.RefObject<HTMLDivElement | null>;
-  /** Callback when ReactFlow instance is ready (for fitView and Excalidraw export) */
-  onReactFlowInstance?: (
-    instance: {
-      fitView: (opts?: { padding?: number; duration?: number }) => boolean;
-      getNodes: () => { id: string; position: { x: number; y: number }; width?: number; height?: number; data?: { label?: string } }[];
-      getEdges: () => { id: string; source: string; target: string }[];
-    } | null
-  ) => void;
+  /** Callback when ReactFlow instance is ready (for fitView and export) */
+  onReactFlowInstance?: (instance: ReactFlowInstance | null) => void;
   className?: string;
 };
 

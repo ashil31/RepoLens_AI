@@ -3,6 +3,7 @@
 import { use, useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { MessageSquare, FileText, FileEdit, FolderX } from "lucide-react";
+import type { ReactFlowInstance } from "reactflow";
 import {
   RepoHeader,
   RepoChat,
@@ -109,11 +110,6 @@ export default function RepoPage({ params }: PageProps) {
     }
   }, [jobStatus, selectedWorkspaceId, repoId, queryClient, refetchRepo]);
 
-  const [isHydrated, setIsHydrated] = useState(false);
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
-
   const chatConvsMap = useChatStore((s) => s.conversations);
   const chatConvs = useMemo(() => chatConvsMap[repoId] || [], [chatConvsMap, repoId]);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -126,23 +122,10 @@ export default function RepoPage({ params }: PageProps) {
   const [mobilePanel, setMobilePanel] = useState<"chat" | "docs">("chat");
   const [expandedPanel, setExpandedPanel] = useState<"chat" | "docs" | "architecture" | "architecture-notes" | "files" | "insights" | null>(null);
   const architectureGraphRef = useRef<HTMLDivElement | null>(null);
-  const reactFlowInstanceRef = useRef<{
-    fitView: (opts?: { padding?: number; duration?: number }) => boolean;
-    getNodes: () => { id: string; position: { x: number; y: number }; width?: number; height?: number; data?: { label?: string } }[];
-    getEdges: () => { id: string; source: string; target: string }[];
-  } | null>(null);
-  const handleReactFlowInstance = useCallback(
-    (
-      instance: {
-        fitView: (opts?: { padding?: number; duration?: number }) => boolean;
-        getNodes: () => { id: string; position: { x: number; y: number }; width?: number; height?: number; data?: { label?: string } }[];
-        getEdges: () => { id: string; source: string; target: string }[];
-      } | null
-    ) => {
-      reactFlowInstanceRef.current = instance;
-    },
-    []
-  );
+  const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
+  const handleReactFlowInstance = useCallback((instance: ReactFlowInstance | null) => {
+    reactFlowInstanceRef.current = instance;
+  }, []);
   const [isAnalyzing] = useState(false);
 
   const { sendMessage, isPending: isChatPending } = useChatMutation(selectedWorkspaceId, repoId);
@@ -382,7 +365,7 @@ export default function RepoPage({ params }: PageProps) {
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
-          {isHydrated && mobilePanel === "chat" && (
+          {mobilePanel === "chat" && (
             <RepoChat
               messages={displayMessages}
               onSendMessage={handleSendMessage}

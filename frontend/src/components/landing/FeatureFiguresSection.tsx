@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const FIGURES = [
   {
     id: "fig-1",
-    label: "FIG 0.2",
+    label: "FIG 0.1",
     title: "Built for codebases",
     description:
       "RepoLens is shaped for how engineering teams explore, document, and ship. Connect a repo and get structure, dependencies, and AI chat in one place.",
@@ -15,7 +15,7 @@ const FIGURES = [
   },
   {
     id: "fig-2",
-    label: "FIG 0.3",
+    label: "FIG 0.2",
     title: "Powered by AI",
     description:
       "Ask questions in plain language, generate docs, and trace dependencies. The assistant understands your project layout and code.",
@@ -23,7 +23,7 @@ const FIGURES = [
   },
   {
     id: "fig-3",
-    label: "FIG 8.4",
+    label: "FIG 0.3",
     title: "Designed for velocity",
     description:
       "Less context switching, fewer “where is this?” moments. Surface insights and docs so your team can move fast without losing context.",

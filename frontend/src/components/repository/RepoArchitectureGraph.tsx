@@ -15,6 +15,7 @@ import {
   type Node,
   type Edge,
   type Connection,
+  type ReactFlowInstance,
   BackgroundVariant,
   Handle,
   Position,
@@ -105,7 +106,7 @@ type RepoArchitectureGraphProps = {
   className?: string;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   /** Called when ReactFlow instance is ready (for export/fitView) */
-  onReactFlowInstance?: (instance: ReturnType<typeof useReactFlow> | null) => void;
+  onReactFlowInstance?: (instance: ReactFlowInstance | null) => void;
 };
 
 async function layoutWithElk(nodes: Node[], edges: Edge[]): Promise<{ nodes: Node[]; edges: Edge[] }> {
