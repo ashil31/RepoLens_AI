@@ -1,8 +1,8 @@
 import { REPOSITORY_OVERVIEW_PROMPT, ARCHITECTURE_ANALYSIS_PROMPT } from "../utils/prompts"
 
 const INFERENCE_URL = "https://inference.do-ai.run/v1/chat/completions"
-const DEFAULT_MODEL = "openai-gpt-oss-120b"
-const MAX_TOKENS = 2048
+const DEFAULT_MODEL = "minimax-m2.5"
+const MAX_TOKENS = 2000
 
 export interface AnalysisContext {
     symbols: any[]
