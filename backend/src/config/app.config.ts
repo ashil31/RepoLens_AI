@@ -12,6 +12,19 @@ function parseExpiryToMs(expiry: string): number {
     return value * 1000
 }
 
+function isProd(): boolean {
+    return (process.env.NODE_ENV || "development") === "production"
+}
+
+function requiredEnv(name: string): string {
+    const v = process.env[name]
+    if (v && v.trim()) return v
+    if (isProd()) {
+        throw new Error(`Missing required environment variable: ${name}`)
+    }
+    return ""
+}
+
 const accessExpiresIn = process.env.JWT_ACCESS_EXPIRES_IN || "15m"
 const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN || "30d"
 
@@ -20,20 +33,19 @@ export const config = {
     NODE_ENV: process.env.NODE_ENV || "development",
     BASE_PATH: "/api",
     FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN || "http://localhost:3000", // must be a specific origin when using credentials (cookies)
-    JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET || "access_secret",
-    JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || "refresh_secret",
+    // Never allow weak defaults in production.
+    JWT_ACCESS_SECRET: requiredEnv("JWT_ACCESS_SECRET") || "access_secret",
+    JWT_REFRESH_SECRET: requiredEnv("JWT_REFRESH_SECRET") || "refresh_secret",
     JWT_ACCESS_EXPIRES_IN: accessExpiresIn,
     JWT_REFRESH_EXPIRES_IN: refreshExpiresIn,
     /** Refresh token expiry in milliseconds (for cookie maxAge and DB expiresAt). */
     JWT_REFRESH_EXPIRES_MS: parseExpiryToMs(refreshExpiresIn),
-    DATABASE_URL: process.env.DATABASE_URL || "",
+    DATABASE_URL: requiredEnv("DATABASE_URL"),
 
     // GitHub App (Module 4)
-    GITHUB_APP_ID: process.env.GITHUB_APP_ID || "",
-    GITHUB_PRIVATE_KEY: process.env.GITHUB_PRIVATE_KEY || "",
-    GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET || "",
+    GITHUB_APP_ID: requiredEnv("GITHUB_APP_ID"),
+    GITHUB_PRIVATE_KEY: requiredEnv("GITHUB_PRIVATE_KEY"),
+    GITHUB_WEBHOOK_SECRET: requiredEnv("GITHUB_WEBHOOK_SECRET"),
     GITHUB_APP_INSTALL_URL: process.env.GITHUB_APP_INSTALL_URL || "https://github.com/apps/repolens-dev/installations/new",
     GITHUB_APP_CALLBACK_URL: process.env.GITHUB_APP_CALLBACK_URL || "http://localhost:3000/github/callback",
-    REPO_CLONE_DIR: process.env.REPO_CLONE_DIR || "",
-    REPO_CLONE_TIMEOUT_MS: process.env.REPO_CLONE_TIMEOUT ? parseInt(process.env.REPO_CLONE_TIMEOUT, 10) : 120_000
 }
