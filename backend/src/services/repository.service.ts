@@ -12,7 +12,7 @@ import {
 } from "../repositories/project.repository"
 import * as githubApi from "./github.service"
 import * as githubRepository from "../repositories/github.repository"
-import { prisma, pool } from "../database/prisma"
+import { prisma} from "../database/prisma"
 import { JobStep } from "@prisma/client"
 import pLimit from "p-limit"
 import { parseCodeFile } from "./parser.service"
@@ -334,21 +334,26 @@ export const processRepositoryAnalysis = async (
                 rows.push(`${id}\t${chunkEscaped}\t${vecStr}\t${startLine}\t${endLine}\t${meta.fileId}\t${symbolName}\t${language}`)
             }
 
-            const client = await pool.connect()
-            try {
-                const copyStream = client.query(
-                    copyFrom(
-                        `COPY code_embeddings (id, chunk, embedding, "startLine", "endLine", "fileId", "symbolName", "language") FROM STDIN`
-                    ) as any
-                )
-                const readable = Readable.from(rows.map((r) => r + "\n"))
-                await pipeline(readable as any, copyStream as any)
-            } catch (err) {
-                console.error("Embedding COPY failed:", err)
-                throw err
-            } finally {
-                client.release()
-            }
+            await prisma.$executeRawUnsafe(`
+    INSERT INTO code_embeddings 
+    (id, chunk, embedding, "startLine", "endLine", "fileId", "symbolName", "language")
+    VALUES ${rows
+        .map((_, i) => `($${i * 8 + 1}, $${i * 8 + 2}, $${i * 8 + 3}::vector, $${i * 8 + 4}, $${i * 8 + 5}, $${i * 8 + 6}, $${i * 8 + 7}, $${i * 8 + 8})`)
+        .join(",")}
+`,
+...rows.flatMap((r, i) => {
+    const parts = r.split("\t")
+    return [
+        parts[0], // id
+        parts[1], // chunk
+        parts[2], // embedding
+        parts[3] === "\\N" ? null : Number(parts[3]),
+        parts[4] === "\\N" ? null : Number(parts[4]),
+        parts[5], // fileId
+        parts[6] === "\\N" ? null : parts[6],
+        parts[7] === "\\N" ? null : parts[7]
+    ]
+}))
 
             chunkBuffer = []
             chunkMeta = []
