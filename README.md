@@ -130,7 +130,7 @@ uvicorn main:app --port 8001 --workers 3
 ### 2. Backend Server (Express + Prisma)
 ```bash
 cd backend
-npm install
+npm install --legacy-peer-deps
 cp .env.example .env
 # 1. Update DATABASE_URL with pgvector support
 # 2. Add GEMINI_API_KEY for RAG
