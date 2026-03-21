@@ -29,11 +29,11 @@ const defaultKeywords = [
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  /** RepoLens mark — `public/favicon.svg` (same geometry as `repolens-logo.tsx` + `.repolens-logo-light` hex colors on #0a0a0a). */
-  icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml", sizes: "any" }],
-    shortcut: "/favicon.svg",
-  },
+  /**
+   * Favicon: use a relative `<link>` in `<head>` (below) so it works on every host.
+   * `metadata.icons` alone is resolved against `metadataBase` — if NEXT_PUBLIC_SITE_URL
+   * was wrong at build time, the icon URL could point at localhost/wrong domain.
+   */
   title: {
     default: `${siteName} — AI Codebase Intelligence & Repository Analysis`,
     template: `%s | ${siteName}`,
@@ -99,6 +99,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+        <link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml" />
+      </head>
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}
       >
