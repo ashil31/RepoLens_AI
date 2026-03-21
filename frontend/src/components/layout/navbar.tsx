@@ -85,9 +85,10 @@ export function Navbar({ variant = "default" }: NavbarProps) {
           size="sm"
           variant={isLanding ? "secondary" : "default"}
           className={cn(
-            "text-sm font-semibold",
-            isLanding &&
-              "bg-white text-black shadow-sm hover:bg-zinc-100 hover:shadow",
+            "text-sm font-semibold transition-all duration-200 active:scale-[0.97]",
+            isLanding
+              ? "bg-white text-black border border-zinc-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,1)] hover:bg-zinc-50"
+              : "bg-primary text-primary-foreground shadow-[0_1px_3px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] hover:bg-primary/90",
           )}
         >
           Sign up
@@ -114,7 +115,12 @@ export function Navbar({ variant = "default" }: NavbarProps) {
           )}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden sm:h-12 sm:w-12">
-            <RepoLensLogo id="navbar-logo" size="lg" variant={isLanding ? "light" : "auto"} className="h-full w-full" />
+            <RepoLensLogo
+              id="navbar-logo"
+              size="lg"
+              variant={isLanding ? "light" : "auto"}
+              className="h-full w-full"
+            />
           </span>
           <span className="truncate sm:mt-1.5 sm:-ml-1">RepoLens</span>
         </Link>
