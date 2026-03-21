@@ -29,6 +29,11 @@ const defaultKeywords = [
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  /** RepoLens mark — `public/favicon.svg` (same geometry as `repolens-logo.tsx` + `.repolens-logo-light` hex colors on #0a0a0a). */
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml", sizes: "any" }],
+    shortcut: "/favicon.svg",
+  },
   title: {
     default: `${siteName} — AI Codebase Intelligence & Repository Analysis`,
     template: `%s | ${siteName}`,

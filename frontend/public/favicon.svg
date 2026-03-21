@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" fill="none">
+  <title>RepoLens</title>
+  <!-- Dark theme chip (#0a0a0a) + same palette as repolens-logo variant=&quot;light&quot; (.repolens-logo-light) -->
+  <rect width="220" height="220" rx="48" fill="#0a0a0a" />
+  <defs>
+    <linearGradient id="rl-f" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0%" stop-color="#e5e5e5" />
+      <stop offset="100%" stop-color="#f5f5f5" />
+    </linearGradient>
+    <linearGradient id="rl-h" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#737373" />
+      <stop offset="100%" stop-color="#737373" stop-opacity="0.95" />
+    </linearGradient>
+    <radialGradient id="rl-l" cx="36%" cy="32%" r="70%">
+      <stop offset="0%" stop-color="#fafafa" />
+      <stop offset="55%" stop-color="#e5e5e5" />
+      <stop offset="100%" stop-color="#f5f5f5" />
+    </radialGradient>
+    <mask id="rl-cut">
+      <rect width="220" height="220" fill="white" />
+      <circle cx="144" cy="130" r="24" fill="black" />
+      <rect
+        x="135"
+        y="150"
+        width="44"
+        height="13"
+        rx="6.5"
+        transform="rotate(45 165 165)"
+        fill="black"
+      />
+    </mask>
+  </defs>
+  <g mask="url(#rl-cut)">
+    <path
+      d="M36 98 Q36 70 62 70 H104 Q116 70 124 86 H164 Q186 86 186 108 V152 Q186 176 162 176 H62 Q36 176 36 152 Z"
+      fill="url(#rl-f)"
+    />
+    <path
+      d="M62 70 H104 Q115 70 123 85 H78 Q66 85 62 70 Z"
+      fill="#e5e5e5"
+    />
+  </g>
+  <circle cx="144" cy="130" r="26" fill="none" stroke="#e5e5e5" stroke-width="2" />
+  <circle cx="144" cy="130" r="24.5" fill="none" stroke="#e5e5e5" stroke-width="1" />
+  <circle cx="144" cy="130" r="24" fill="url(#rl-l)" />
+  <rect
+    x="135"
+    y="150"
+    width="44"
+    height="13"
+    rx="6.5"
+    transform="rotate(45 165 165)"
+    fill="url(#rl-h)"
+  />
+  <rect
+    x="135"
+    y="150"
+    width="44"
+    height="3.5"
+    rx="2"
+    transform="rotate(45 165 165)"
+    fill="#fafafa"
+    opacity="0.05"
+  />
+</svg>

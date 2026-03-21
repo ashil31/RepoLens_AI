@@ -82,9 +82,11 @@ export const generateOtp = async (userId: string, email: string, type: OtpType =
         type,
         expiresAt
     })
-
+    console.log(`[OTP] For User ${userId}: ${code}`)
+    console.log(`[OTP] Sending to ${email}: ${code}`)
     // Send via email
     try {
+        console.log(`[OTP] Sending to ${email}: ${code}`)
         await MailService.sendVerificationEmail(email, code)
     } catch (error) {
         console.error(`Failed to send OTP email to ${email}:`, error)

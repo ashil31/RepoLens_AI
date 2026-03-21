@@ -27,7 +27,8 @@ const setRefreshTokenCookie = (res: Response, token: string) => {
 export const register = asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = req.body
     const user = await registerUser(email, password)
-
+    console.log(`[Register] User registered: ${user.id}`);
+    console.log(`[Register] Sending OTP to ${user.email}`);
     // Generate and "send" OTP
     await AuthService.generateOtp(user.id, user.email, "EMAIL_VERIFICATION")
 
