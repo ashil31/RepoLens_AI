@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { GlowingButton } from "@/components/ui/glowing-button";
 import { Spotlight } from "@/components/ui/spotlight";
 import { HeroEmbeddedDashboard } from "./HeroEmbeddedDashboard";
-import { NoiseBackground } from "./NoiseBackground";
 
 // ─── Shard configs ────────────────────────────────────────────────────────────
 
@@ -371,18 +371,21 @@ export function HeroSection() {
                 asChild
                 variant="default"
                 size="cta"
-                className="w-full min-w-[140px] bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto sm:min-w-[160px] sm:px-8"
+                className="w-full min-w-[140px] bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto sm:min-w-[160px] sm:px-8 
+             relative overflow-hidden
+             shadow-[inset_0_1px_2px_rgba(255,255,255,0.2),inset_0_-1px_2px_rgba(0,0,0,0.4)]
+             active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]
+             active:scale-[0.98] transition-all"
               >
                 <Link href="/dashboard">Go to Dashboard</Link>
               </Button>
-              <Button
+              <GlowingButton
                 asChild
-                variant="outline"
-                size="cta"
-                className="w-full min-w-[140px] border-white/20 text-foreground hover:bg-white/10 hover:text-foreground sm:w-auto sm:min-w-[160px] sm:px-8"
+                wrapperClassName="w-full min-w-[140px] sm:w-auto sm:min-w-[160px]"
+                className="sm:px-8"
               >
                 <Link href="/register">Get started</Link>
-              </Button>
+              </GlowingButton>
 
               <svg
                 aria-hidden

@@ -23,6 +23,10 @@
   --chart-4: 30 75% 52%;
   --chart-5: 340 65% 52%;
 }
+@theme inline {
+  /* ... your existing variables ... */
+  --shadow-inner-button: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.25);
+}
 
 /* Light theme palette – single source for html.light and .repolens-logo-light */
 :root {
