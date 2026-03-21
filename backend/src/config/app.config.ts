@@ -48,4 +48,11 @@ export const config = {
     GITHUB_WEBHOOK_SECRET: requiredEnv("GITHUB_WEBHOOK_SECRET"),
     GITHUB_APP_INSTALL_URL: process.env.GITHUB_APP_INSTALL_URL || "https://github.com/apps/repolens-dev/installations/new",
     GITHUB_APP_CALLBACK_URL: process.env.GITHUB_APP_CALLBACK_URL || "http://localhost:3000/github/callback",
+
+    // Mail (Nodemailer)
+    SMTP_HOST: process.env.SMTP_HOST || "smtp.resend.com",
+    SMTP_PORT: parseInt(process.env.SMTP_PORT || "465"),
+    SMTP_USER: process.env.SMTP_USER || "resend",
+    SMTP_PASS: process.env.SMTP_PASS || "",
+    SMTP_FROM: process.env.SMTP_FROM || "onboarding@resend.dev",
 }

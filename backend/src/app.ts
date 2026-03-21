@@ -17,7 +17,9 @@ app.use(
     cors({
         origin: [
             "https://repolens.live",
-            "https://www.repolens.live"
+            "https://www.repolens.live",
+            "http://localhost:3000",
+            "http://localhost:3001"
         ],
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

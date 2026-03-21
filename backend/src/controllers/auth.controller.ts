@@ -29,7 +29,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     const user = await registerUser(email, password)
 
     // Generate and "send" OTP
-    await AuthService.generateOtp(user.id, "EMAIL_VERIFICATION")
+    await AuthService.generateOtp(user.id, user.email, "EMAIL_VERIFICATION")
 
     return res.status(HTTPSTATUS.CREATED).json({
         message: "Registration successful. Please check your email for the verification code.",

@@ -4,6 +4,7 @@ import { config } from "../config/app.config"
 import * as RefreshTokenRepo from "../repositories/auth/refresh-token.repository"
 import * as OtpRepo from "../repositories/auth/otp.repository"
 import { OtpType, User } from "@prisma/client"
+import { MailService } from "./mail.service"
 
 const hashToken = (token: string) => {
     return crypto.createHash("sha256").update(token).digest("hex")
@@ -70,7 +71,7 @@ export const getSessionIdByRawToken = async (token: string): Promise<string | nu
 
 // ── OTP ──────────────────────────────────────────────────────────────────────
 
-export const generateOtp = async (userId: string, type: OtpType = "EMAIL_VERIFICATION") => {
+export const generateOtp = async (userId: string, email: string, type: OtpType = "EMAIL_VERIFICATION") => {
     const code = Math.floor(100000 + Math.random() * 900000).toString() // 6 digit OTP
     const expiresAt = new Date()
     expiresAt.setMinutes(expiresAt.getMinutes() + 10) // 10 minutes
@@ -82,8 +83,13 @@ export const generateOtp = async (userId: string, type: OtpType = "EMAIL_VERIFIC
         expiresAt
     })
 
-    // In a real app, send this via email
-    console.log(`[OTP] For User ${userId}: ${code}`)
+    // Send via email
+    try {
+        await MailService.sendVerificationEmail(email, code)
+    } catch (error) {
+        console.error(`Failed to send OTP email to ${email}:`, error)
+        // We don't throw here to avoid failing registration if email fails (though in prod we might want to)
+    }
 
     return code
 }

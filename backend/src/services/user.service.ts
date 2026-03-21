@@ -8,6 +8,7 @@ import {
     findUserByGoogleId,
     createGoogleUser,
     markUserAsVerified,
+    updateUserPassword,
     getUserCredits,
     deductCredit
 } from "../repositories/user.repository"
@@ -20,7 +21,12 @@ const SALT_ROUNDS = 12
 export const registerUser = async (email: string, password: string) => {
     const existing = await findUserByEmail(email)
     if (existing) {
-        throw new AppAppError("Email already in use", HTTPSTATUS.CONFLICT, "EMAIL_EXISTS")
+        if (existing.isVerified) {
+            throw new AppAppError("Email already in use", HTTPSTATUS.CONFLICT, "EMAIL_EXISTS")
+        }
+        // If user exists but is not verified, allow re-registration by updating password
+        const passwordHash = await bcrypt.hash(password, SALT_ROUNDS)
+        return updateUserPassword(existing.id, passwordHash)
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS)
