@@ -16,6 +16,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/dashboard/"],
       },
     ],
-    sitemap: `${base}/sitemap.xml`,
+    sitemap: `https://repolens.live/sitemap.xml`,
   };
 }
