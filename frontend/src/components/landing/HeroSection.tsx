@@ -4,8 +4,10 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { GlowingButton } from "@/components/ui/glowing-button";
+import { AnimatedShinyText } from "@/components/ui/animated-shiny-text";
 import { Spotlight } from "@/components/ui/spotlight";
 import { HeroEmbeddedDashboard } from "./HeroEmbeddedDashboard";
+// import { ComicText } from "../ui/ComicText";
 
 // ─── Shard configs ────────────────────────────────────────────────────────────
 
@@ -329,6 +331,28 @@ export function HeroSection() {
       <div className="container relative mx-auto flex w-full flex-1 flex-col items-center justify-center overflow-hidden px-4 py-12 sm:py-16 md:py-20 min-h-[70vh] sm:min-h-[75vh] md:min-h-[80vh]">
         <div className="relative z-10 flex flex-col items-center justify-center gap-6 sm:gap-8 md:gap-10">
           <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+            transition={{ delay: 0.08, duration: 0.45, ease: "easeOut" }}
+            className="group inline-flex items-center rounded-full border border-white/10 bg-white/5 text-xs text-foreground transition-all hover:cursor-pointer hover:bg-white/8"
+          >
+            <AnimatedShinyText
+              shimmerWidth={140}
+              className="inline-flex items-center justify-center px-4 py-1 text-[11px] font-medium tracking-[0.02em] transition ease-out group-hover:text-foreground/85"
+            >
+              <span className="relative inline-flex h-2 w-2 shrink-0 items-center justify-center">
+                <span className="absolute inline-flex h-2 w-2 rounded-full bg-white/50 animate-ping" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white/80" />
+              </span>
+              <span className="ml-2">
+                No setup friction • Instant insights • Developer-first
+              </span>
+              {/* <span className="ml-1 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5">
+                →
+              </span> */}
+            </AnimatedShinyText>
+          </motion.div>
+          <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
@@ -358,6 +382,7 @@ export function HeroSection() {
                 >
                   RepoLens
                 </motion.span>
+                {/* <ComicText>RepoLens</ComicText> */}
               </span>
             </h1>
 
@@ -366,23 +391,27 @@ export function HeroSection() {
               and documentation, so you can ship faster.
             </p>
 
-            <div className="relative flex w-full max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-4 md:gap-5">
+            <div className="relative flex w-full flex-row flex-wrap items-center justify-center gap-3 sm:gap-4 md:gap-5">
               <Button
                 asChild
-                variant="default"
                 size="cta"
-                className="w-full min-w-[140px] bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto sm:min-w-[160px] sm:px-8 
-             relative overflow-hidden
-             shadow-[inset_0_1px_2px_rgba(255,255,255,0.2),inset_0_-1px_2px_rgba(0,0,0,0.4)]
-             active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]
-             active:scale-[0.98] transition-all"
+                className="
+    min-w-[140px] sm:min-w-[160px]
+    px-5 sm:px-8
+    justify-center
+    bg-primary text-primary-foreground hover:bg-primary/90
+    relative overflow-hidden
+    shadow-[inset_0_1px_2px_rgba(255,255,255,0.2),inset_0_-1px_2px_rgba(0,0,0,0.4)]
+    active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]
+    active:scale-[0.98] transition-all
+  "
               >
                 <Link href="/dashboard">Go to Dashboard</Link>
               </Button>
               <GlowingButton
                 asChild
-                wrapperClassName="w-full min-w-[140px] sm:w-auto sm:min-w-[160px]"
-                className="sm:px-8"
+                wrapperClassName="min-w-[140px] sm:min-w-[160px]"
+                className="px-5 sm:px-8 justify-center"
               >
                 <Link href="/register">Get started</Link>
               </GlowingButton>

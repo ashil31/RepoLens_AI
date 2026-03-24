@@ -13,7 +13,10 @@ const homeTitle =
 const homeDescription =
   "Turn any repo into clarity: automated analysis, dependency and API mapping, embeddings-powered search, and AI-generated documentation. Built for teams who need to understand large codebases fast.";
 
-/** Landing page — canonical URL and rich SEO for the homepage. */
+/**
+ * Homepage — overrides copy + canonical only. OG/Twitter images and `card` come from root `layout.tsx`
+ * (`metadataBase` + `openGraph.images` / `twitter` defaults). Do not repeat `images` here.
+ */
 export const metadata: Metadata = {
   title: {
     absolute: homeTitle,
@@ -27,33 +30,23 @@ export const metadata: Metadata = {
     "semantic search codebase",
     "RepoLens",
   ],
+  alternates: {
+    canonical: getSiteUrl(),
+  },
   openGraph: {
     title: homeTitle,
     description: homeDescription,
     url: getSiteUrl(),
-    type: "website",
-    images: [
-      {
-        url: "/og/repolens-og-1200x630.png",
-        width: 1200,
-        height: 630,
-        alt: "RepoLens — AI-powered codebase analysis and repository intelligence",
-      },
-    ],
   },
   twitter: {
     title: homeTitle,
     description: homeDescription,
-    images: ["/og/repolens-og-1200x630.png"],
-  },
-  alternates: {
-    canonical: getSiteUrl(),
   },
 };
 
 export default function Home(): ReactNode {
   return (
-    <div className="flex min-h-screen flex-col overflow-x-clip">
+    <div className="hero-dark flex min-h-screen flex-col overflow-x-clip bg-background text-foreground">
       <Navbar variant="landing" />
       <main className="flex w-full flex-1 flex-col pt-12 sm:pt-14">
         <HeroSection />

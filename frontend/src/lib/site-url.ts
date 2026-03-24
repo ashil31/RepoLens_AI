@@ -4,7 +4,7 @@
  * If unset at build time, OG/Twitter absolute URLs may be wrong — use env in production.
  */
 export function getSiteUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const fromEnv = "https://www.repolens.live";
   if (fromEnv) {
     return fromEnv.replace(/\/$/, "");
   }

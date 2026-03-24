@@ -4,6 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { Providers } from "./providers";
 import { getSiteUrl } from "@/lib/site-url";
+import { OG_IMAGE } from "@/lib/seo";
 
 const siteUrl = getSiteUrl();
 const siteName = "RepoLens";
@@ -29,11 +30,6 @@ const defaultKeywords = [
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  /**
-   * Favicon: use a relative `<link>` in `<head>` (below) so it works on every host.
-   * `metadata.icons` alone is resolved against `metadataBase` — if NEXT_PUBLIC_SITE_URL
-   * was wrong at build time, the icon URL could point at localhost/wrong domain.
-   */
   title: {
     default: `${siteName} — AI Codebase Intelligence & Repository Analysis`,
     template: `%s | ${siteName}`,
@@ -49,27 +45,21 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
+  /** Defaults for all routes; `/` and others override title/description/url only — images stay here. */
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: siteUrl,
     siteName,
+    url: siteUrl,
     title: `${siteName} — AI Codebase Intelligence & Repository Analysis`,
     description: defaultDescription,
-    images: [
-      {
-        url: "/og/repolens-og-1200x630.png",
-        width: 1200,
-        height: 630,
-        alt: "RepoLens landing page — Understand your codebase with AI",
-      },
-    ],
+    images: [OG_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
     title: `${siteName} — AI Codebase Intelligence`,
     description: defaultDescription,
-    images: ["/og/repolens-og-1200x630.png"],
+    images: [OG_IMAGE],
   },
   robots: {
     index: true,
